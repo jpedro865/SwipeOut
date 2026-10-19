@@ -1,29 +1,50 @@
 {
   "expo": {
-    "name": "swipeout",
+    "name": "SwipeOut",
     "slug": "swipeout",
+    "scheme": "swipeout",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "app.swipeout"
     },
     "android": {
+      "package": "app.swipeout",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#171627",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
     "plugins": [
       "expo-router",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "backgroundColor": "#171627"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "SwipeOut shows your photos one at a time so you can keep them or mark them for deletion. Photos never leave your device, and nothing is deleted until you confirm.",
+          "savePhotosPermission": false,
+          "granularPermissions": ["photo"]
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ]
     ]
   }
 }
