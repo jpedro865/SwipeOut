@@ -1,7 +1,8 @@
 // Pure game logic: no React Native imports, so `node src/logic.test.ts` can check it.
 
-export type Decision = 'keep' | 'delete' | 'deleted'
-export type Day = { reviewed: number; goal: number; done?: boolean; frozen?: boolean }
+type Decision = 'keep' | 'delete' | 'deleted'
+// done: today's rewards were granted; earned: that grant included a streak freeze
+export type Day = { reviewed: number; goal: number; done?: boolean; earned?: boolean; frozen?: boolean }
 export type Settings = { haptics: boolean; motion: boolean; reminder: number | null } // reminder = minutes after midnight
 export type Data = {
   onboarded: boolean
@@ -16,7 +17,7 @@ export type Data = {
 }
 
 export const GOALS = [25, 50, 100, 200]
-export const STREAK_BADGES = [3, 7, 14, 30, 60, 100]
+const STREAK_BADGES = [3, 7, 14, 30, 60, 100]
 export const CHEERS = [25, 50, 100]
 export const MAX_FREEZES = 2
 export const FREEZE_EVERY = 7 // goal days in a row earn a streak freeze
@@ -86,7 +87,7 @@ export function stats(s: Data) {
 }
 
 type Ctx = ReturnType<typeof stats> & { longest: number }
-export type Achievement = { id: string; icon: string; title: string; desc: string; test: (c: Ctx) => boolean }
+type Achievement = { id: string; icon: string; title: string; desc: string; test: (c: Ctx) => boolean }
 
 const badge = (days: number, icon: string, title: string): Achievement =>
   ({ id: `streak${days}`, icon, title, desc: `${days}-day streak`, test: c => c.longest >= days })
@@ -114,16 +115,19 @@ function unlock(s: Data, today: string): Data {
   return { ...s, unlocked: { ...s.unlocked, ...Object.fromEntries(fresh.map(a => [a.id, today])) } }
 }
 
+// Grants today's rewards once, even if undo later dips below the goal: done, plus a freeze every FREEZE_EVERY goal days in a row.
+function settle(s: Data, today: string): Data {
+  const day = s.days[today]
+  if (!day || day.done || day.reviewed < day.goal) return unlock(s, today)
+  const earned = streak(s.days, today) % FREEZE_EVERY === 0 && s.freezes < MAX_FREEZES
+  return unlock({ ...s, freezes: s.freezes + (earned ? 1 : 0), days: { ...s.days, [today]: { ...day, done: true, earned } } }, today)
+}
+
 export function decide(s: Data, id: string, choice: 'keep' | 'delete', today: string): Data {
   if (s.decisions[id]) return s
   const prev = s.days[today]
   const day: Day = { ...prev, reviewed: (prev?.reviewed ?? 0) + 1, goal: prev?.goal ?? s.goal }
-  let next: Data = { ...s, decisions: { ...s.decisions, [id]: choice }, days: { ...s.days, [today]: day } }
-  if (!day.done && day.reviewed >= day.goal) {
-    day.done = true // rewards are granted once per day, even if undo dips below the goal again
-    if (streak(next.days, today) % FREEZE_EVERY === 0) next.freezes = Math.min(MAX_FREEZES, s.freezes + 1)
-  }
-  return unlock(next, today)
+  return settle({ ...s, decisions: { ...s.decisions, [id]: choice }, days: { ...s.days, [today]: day } }, today)
 }
 
 export function undo(s: Data, id: string, today: string): Data {
@@ -143,16 +147,19 @@ export function markDeleted(s: Data, ids: string[], bytes: number, today: string
   return unlock({ ...s, decisions, bytesFreed: s.bytesFreed + bytes, library: Math.max(0, s.library - ids.length) }, today)
 }
 
+// A finished day stays finished; otherwise the new goal applies today and may complete it.
 export function setGoal(s: Data, goal: number, today: string): Data {
   const day = s.days[today]
-  return { ...s, goal, days: day ? { ...s.days, [today]: { ...day, goal } } : s.days }
+  if (!day || day.done) return { ...s, goal }
+  return settle({ ...s, goal, days: { ...s.days, [today]: { ...day, goal } } }, today)
 }
 
-// Marks on photos that left the library (deleted elsewhere, or outside a limited selection) can't be acted on: drop them.
+// Photos that left the library (deleted elsewhere, or outside a limited selection) drop out of progress,
+// so "reviewed" can't outrun the library. Our own deletions stay counted.
 export function setLibrary(s: Data, ids: string[], today: string): Data {
   const present = new Set(ids)
   const decisions = { ...s.decisions }
-  for (const id in decisions) if (decisions[id] === 'delete' && !present.has(id)) delete decisions[id]
+  for (const id in decisions) if (decisions[id] !== 'deleted' && !present.has(id)) delete decisions[id]
   return unlock({ ...s, decisions, library: ids.length }, today)
 }
 
@@ -169,6 +176,13 @@ export function applyFreezes(s: Data, today: string): Data {
 }
 
 export const nextBadge = (current: number) => STREAK_BADGES.find(n => n > current) ?? null
+
+export function milestone(current: number) {
+  const n = nextBadge(current)
+  return n
+    ? `Next milestone: ${n} days — ${n - current} more to unlock ${ACHIEVEMENTS.find(a => a.id === `streak${n}`)?.title}`
+    : 'Every streak badge unlocked 👑'
+}
 
 // Level n needs 50·n·(n-1) XP: 0, 100, 300, 600, 1000…
 export function xp(s: Data) {

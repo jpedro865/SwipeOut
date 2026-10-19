@@ -58,12 +58,22 @@ s = { ...initialData, goal: 25, freezes: 1 }
 s = goal(s, T)
 eq(applyFreezes(s, addDays(T, 3)), s)
 
+// a freeze at the cap isn't "earned"; a finished day stays finished when the goal goes up
+s = { ...initialData, goal: 25, freezes: 2 }
+for (let i = 6; i >= 0; i--) s = goal(s, addDays(T, -i))
+eq([s.freezes, s.days[T].earned], [2, false])
+s = setGoal(s, 200, T)
+eq([s.goal, s.days[T].goal, streak(s.days, T)], [200, 25, 7])
+
 // goal change applies to today; deletion stats and library progress
 s = { ...initialData, goal: 100 }
 s = goal(s, T, 30)
 eq(streak(s.days, T), 0)
-s = setGoal(s, 25, T)
-eq(streak(s.days, T), 1)
+s = setGoal(s, 25, T) // lowering below today's count completes the day
+eq([streak(s.days, T), s.days[T].done], [1, true])
+s = setLibrary(s, Object.keys(s.decisions).filter(id => id !== '2026-03-10-1'), T) // a kept photo vanished
+eq(stats(s).reviewed, 29)
+s = decide(s, '2026-03-10-1', 'keep', T)
 s = setLibrary(s, Object.keys(s.decisions).concat('new-photo'), T)
 eq(s.library, 31)
 s = setLibrary(s, Object.keys(s.decisions).filter(id => id !== '2026-03-10-6'), T) // a marked photo vanished
