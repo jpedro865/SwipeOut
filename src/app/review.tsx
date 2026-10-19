@@ -3,14 +3,13 @@ import { router } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, FlatList, Modal, Platform, Pressable, View } from 'react-native'
 import { dayKey, markDeleted, setDecision } from '../logic'
-import { deletePhotos, sizeOf } from '../media'
+import { allPhotoIds, deletePhotos, sizeOf } from '../media'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
-import { Button, Screen, Txt, buzz, fmtBytes } from '../ui'
+import { Button, Screen, Txt, buzz, center, fmtBytes } from '../ui'
 
 const photos = (n: number) => `${n} photo${n === 1 ? '' : 's'}`
 const sum = (ids: string[], sizes: Record<string, number>) => ids.reduce((a, id) => a + (sizes[id] ?? 0), 0)
-const center = { textAlign: 'center' } as const
 
 export default function Review() {
   const t = useTheme()
@@ -21,7 +20,7 @@ export default function Review() {
   const [preview, setPreview] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const [done, setDone] = useState<{ n: number; bytes: number } | null>(null)
+  const [done, setDone] = useState<{ n: number; bytes: number; stuck: number } | null>(null)
 
   useEffect(() => {
     let live = true
@@ -59,10 +58,15 @@ export default function Review() {
       setFailed(true)
       return
     }
-    const freed = sum(del, known.current)
-    update(s => markDeleted(s, del, freed, dayKey()))
-    buzz(data.settings.haptics, 'success')
-    setDone({ n: del.length, bytes: freed })
+    // The OS can resolve without removing everything (ids already gone, Android 7-10 per-file failures): record only what left.
+    const left = new Set(await allPhotoIds().catch(() => []))
+    const gone = del.filter(id => !left.has(id))
+    const freed = sum(gone, known.current)
+    if (gone.length) {
+      update(s => markDeleted(s, gone, freed, dayKey()))
+      buzz(data.settings.haptics, 'success')
+    }
+    setDone({ n: gone.length, bytes: freed, stuck: del.length - gone.length })
     setBusy(false)
   }
 
@@ -94,8 +98,9 @@ export default function Review() {
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 12 }}>
           {done ? (
             <>
-              <Txt v="title" style={center}>🎉 {photos(done.n)} cleared</Txt>
+              <Txt v="title" style={center}>{done.n ? `🎉 ${photos(done.n)} cleared` : 'Nothing was deleted.'}</Txt>
               {done.bytes > 0 && <Txt muted style={center}>≈ {fmtBytes(done.bytes)} freed</Txt>}
+              {done.stuck > 0 && <Txt muted style={center}>{photos(done.stuck)} couldn't be deleted and stay marked.</Txt>}
             </>
           ) : (
             <Txt style={center}>Nothing marked yet. Swipe left on photos you don't need.</Txt>
