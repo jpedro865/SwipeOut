@@ -7,7 +7,7 @@ import { ACHIEVEMENTS, CHEERS, dayKey, decide, met, nextBadge, setLibrary, stats
 import { allPhotoIds, getPermission, pickMorePhotos, requestPermission } from '../../media'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
-import { Bar, Button, buzz, Card, Screen, Txt } from '../../ui'
+import { Bar, Button, buzz, Card, center, Screen, Txt } from '../../ui'
 
 export default function Swipe() {
   const { data, update } = useStore()
@@ -18,10 +18,13 @@ export default function Swipe() {
   const [queue, setQueue] = useState<string[] | null>(null)
   const [idx, setIdx] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const decidedOn = useRef<Record<string, string>>({}) // id -> day it was counted on, so undo after midnight fixes the right day
   const latest = useRef(data)
   latest.current = data
 
   const load = async () => {
+    setFailed(false)
     try {
       const p = await getPermission()
       setPerm(p)
@@ -32,7 +35,8 @@ export default function Swipe() {
       setQueue(ids.filter(id => !latest.current.decisions[id]))
       setIdx(0)
     } catch {
-      setQueue([]) // empty state carries the retry button
+      setFailed(true)
+      setQueue([])
     }
   }
   useEffect(() => {
@@ -69,6 +73,7 @@ export default function Swipe() {
     const day = data.days[k]
     const n = (day?.reviewed ?? 0) + 1
     const willComplete = !day?.done && n >= (day?.goal ?? data.goal)
+    decidedOn.current[ids[0]] = k
     update(s => decide(s, ids[0], choice, k))
     buzz(data.settings.haptics, 'tap')
     setIdx(idx + 1)
@@ -87,7 +92,7 @@ export default function Swipe() {
   }
 
   const onUndo = () => {
-    update(s => undo(s, prev!, dayKey()))
+    update(s => undo(s, prev!, decidedOn.current[prev!] ?? dayKey()))
     setIdx(idx - 1)
   }
 
@@ -176,11 +181,11 @@ export default function Swipe() {
             <Deck ref={deck} ids={ids} onDecide={onDecide} motion={data.settings.motion} />
           ) : (
             <View style={{ alignItems: 'center', gap: 12, padding: 16 }}>
-              <Txt v="big">{s.total ? '🦸' : '📭'}</Txt>
-              <Txt v="h2" style={{ textAlign: 'center' }}>{s.total ? 'Camera roll hero — every photo reviewed' : 'No photos here yet'}</Txt>
-              {!s.total && <Txt muted style={{ textAlign: 'center' }}>Snap a few and come back — we'll be ready to swipe.</Txt>}
-              {s.marked > 0 && <Button title={`Review ${s.marked} marked`} onPress={() => router.push('/review')} style={{ alignSelf: 'stretch' }} />}
-              <Button title="Check for new photos" outline onPress={load} style={{ alignSelf: 'stretch' }} />
+              <Txt v="big">{failed ? '😕' : s.total ? '🦸' : '📭'}</Txt>
+              <Txt v="h2" style={center}>{failed ? "Couldn't load your library" : s.total ? 'Camera roll hero — every photo reviewed' : 'No photos here yet'}</Txt>
+              {!failed && !s.total && <Txt muted style={center}>Snap a few and come back — we'll be ready to swipe.</Txt>}
+              {!failed && s.marked > 0 && <Button title={`Review ${s.marked} marked`} onPress={() => router.push('/review')} style={{ alignSelf: 'stretch' }} />}
+              <Button title={failed ? 'Try again' : 'Check for new photos'} outline onPress={load} style={{ alignSelf: 'stretch' }} />
             </View>
           )}
         </View>

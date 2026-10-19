@@ -57,7 +57,7 @@ export function Deck({ ids, onDecide, motion, ref }: { ids: string[]; onDecide: 
 
   return (
     <View style={{ flex: 1 }}>
-      {ids.slice(0, 3).map((id, i) => {
+      {ids.map((id, i) => {
         const step = Animated.subtract(i, near)
         return (
           <Animated.View
@@ -77,7 +77,7 @@ export function Deck({ ids, onDecide, motion, ref }: { ids: string[]; onDecide: 
                 : { transform: [...pos.getTranslateTransform(), { rotate }] },
             ]}
           >
-            {!i && <Image source={{ uri: id }} contentFit="cover" blurRadius={40} style={StyleSheet.absoluteFill} />}
+            <Image source={{ uri: id }} contentFit="cover" blurRadius={40} style={StyleSheet.absoluteFill} />
             <Image source={{ uri: id }} contentFit="contain" recyclingKey={id} transition={120} style={StyleSheet.absoluteFill} />
             {!i && stamp('KEEP', t.mint, keep, { left: 20, transform: [{ rotate: '-12deg' }] })}
             {!i && stamp('DELETE', t.coral, del, { right: 20, transform: [{ rotate: '12deg' }] })}
