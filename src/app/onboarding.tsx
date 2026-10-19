@@ -5,10 +5,9 @@ import { GOALS, dayKey, setGoal } from '../logic'
 import { requestPermission } from '../media'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
-import { Button, Card, Screen, Txt } from '../ui'
+import { Button, Card, Screen, Txt, center } from '../ui'
 
 const BLURBS: Record<number, string> = { 25: 'A quick tidy · ~2 min', 50: 'Steady progress · ~4 min', 100: 'Big push · ~7 min', 200: 'Power cleanup · ~14 min' }
-const center = { textAlign: 'center' } as const
 
 export default function Onboarding() {
   const t = useTheme()

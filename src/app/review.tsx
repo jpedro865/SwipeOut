@@ -136,7 +136,7 @@ export default function Review() {
             {sizes ? !!bytes && <Txt muted style={center}>≈ {fmtBytes(bytes)} to free</Txt> : <Txt muted style={center}>Estimating size…</Txt>}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Button title="Keep all" outline disabled={busy} onPress={() => update(s => ids.reduce((s, id) => setDecision(s, id, 'keep'), s))} style={{ flex: 1 }} />
-              <Button title={busy ? 'Deleting…' : `Delete ${photos(n)}`} color={t.coral} disabled={!n || busy} onPress={confirm} style={{ flex: 2 }} />
+              <Button title={busy ? 'Deleting…' : `Delete ${photos(n)}`} disabled={!n || busy} onPress={confirm} style={{ flex: 2 }} />
             </View>
           </View>
         </>

@@ -2,11 +2,12 @@ import * as Haptics from 'expo-haptics'
 import type { ReactNode } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextProps, type ViewStyle } from 'react-native'
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context'
+import { parseDay } from './logic'
 import { useTheme } from './theme'
 
-export function Screen({ children, edges = ['top'], style }: { children: ReactNode; edges?: Edge[]; style?: StyleProp<ViewStyle> }) {
+export function Screen({ children, edges = ['top'] }: { children: ReactNode; edges?: Edge[] }) {
   const t = useTheme()
-  return <SafeAreaView edges={edges} style={[{ flex: 1, backgroundColor: t.bg }, style]}>{children}</SafeAreaView>
+  return <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: t.bg }}>{children}</SafeAreaView>
 }
 
 const variants = {
@@ -24,14 +25,13 @@ export function Txt({ v = 'body', muted, color, style, ...rest }: TextProps & { 
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const t = useTheme()
-  return <View style={[{ backgroundColor: t.card, borderRadius: 24, padding: 20, gap: 12 }, style]}>{children}</View>
+  return <View style={[{ backgroundColor: t.card, backgroundImage: t.wash, borderRadius: 24, padding: 20, gap: 12 }, style]}>{children}</View>
 }
 
 // Pill button. Solid buttons use a brand fill with Midnight text.
-export function Button({ title, onPress, color, outline, disabled, style }: {
+export function Button({ title, onPress, outline, disabled, style }: {
   title: string
   onPress: () => void
-  color?: string
   outline?: boolean
   disabled?: boolean
   style?: StyleProp<ViewStyle>
@@ -45,7 +45,7 @@ export function Button({ title, onPress, color, outline, disabled, style }: {
       disabled={disabled}
       style={({ pressed }) => [
         {
-          backgroundColor: outline ? 'transparent' : color ?? t.coral,
+          backgroundColor: outline ? 'transparent' : t.coral,
           borderWidth: outline ? 1.5 : 0,
           borderColor: t.line,
           borderRadius: 999,
@@ -63,24 +63,27 @@ export function Button({ title, onPress, color, outline, disabled, style }: {
   )
 }
 
-export function Bar({ value, color, height = 10 }: { value: number; color?: string; height?: number }) {
+export function Bar({ value, color }: { value: number; color?: string }) {
   const t = useTheme()
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
   return (
-    <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct }} style={{ height, borderRadius: height, backgroundColor: t.raised, overflow: 'hidden' }}>
-      <View style={{ width: `${pct}%`, height: '100%', borderRadius: height, backgroundColor: color ?? t.coral }} />
+    <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct }} style={{ height: 10, borderRadius: 5, backgroundColor: t.raised, overflow: 'hidden' }}>
+      <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: color ?? t.coral }} />
     </View>
   )
 }
 
-export function Stat({ value, label, color }: { value: string | number; label: string; color?: string }) {
+export function Stat({ value, label }: { value: string | number; label: string }) {
   return (
     <View style={{ flex: 1, gap: 2 }}>
-      <Txt v="title" color={color}>{typeof value === 'number' ? value.toLocaleString() : value}</Txt>
+      <Txt v="title">{typeof value === 'number' ? value.toLocaleString() : value}</Txt>
       <Txt v="small" muted>{label}</Txt>
     </View>
   )
 }
+
+export const center = { textAlign: 'center' } as const
+export const fmtDay = (k: string) => parseDay(k).toLocaleDateString([], { month: 'short', day: 'numeric' })
 
 export function fmtBytes(n: number) {
   if (n < 1e6) return `${Math.round(n / 1e3)} KB`
