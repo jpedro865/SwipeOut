@@ -3,9 +3,9 @@ import { Asset, AssetField, MediaType, Query, getPermissionsAsync, presentPermis
 import { Platform } from 'react-native'
 
 // Photos only; the same list must go to the plugin config and the runtime request on Android.
-// Typed as the module's response so accessPrivileges ('limited' on iOS / Android 14+) is visible; it is set at runtime.
+// Cast so accessPrivileges ('limited' on iOS / Android 14+) is visible; it is set at runtime.
 export const getPermission = () => getPermissionsAsync(false, ['photo']) as Promise<PermissionResponse>
-export const requestPermission = () => requestPermissionsAsync(false, ['photo']) as Promise<PermissionResponse>
+export const requestPermission = () => requestPermissionsAsync(false, ['photo'])
 export const pickMorePhotos = () => presentPermissionsPicker(['photo']) // no-op unless access is limited
 
 const PAGE = 2000
@@ -22,7 +22,7 @@ export async function allPhotoIds() {
       .offset(offset)
       .exeForMetadata()
     for (const a of page) ids.push(a.id)
-    if (page.length < PAGE) return ids
+    if (page.length < PAGE) return [...new Set(ids)] // offset paging repeats an id if a photo lands mid-sweep
   }
 }
 
