@@ -1,12 +1,13 @@
 import * as Notifications from 'expo-notifications'
+import { useIsFocused } from 'expo-router'
+import { memo, useRef } from 'react'
 import { Alert, Linking, Platform, Pressable, ScrollView, Switch, View } from 'react-native'
-import { ACHIEVEMENTS, GOALS, dayKey, parseDay, setGoal, xp, type Settings } from '../../logic'
+import { ACHIEVEMENTS, GOALS, dayKey, setGoal, xp, type Data, type Settings } from '../../logic'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
-import { Bar, Button, Card, Screen, Txt } from '../../ui'
+import { Bar, Button, Card, Screen, Txt, fmtDay } from '../../ui'
 
 const fmtTime = (m: number) => new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-const fmtDay = (k: string) => parseDay(k).toLocaleDateString([], { month: 'short', day: 'numeric' })
 
 // Serialized so quick stepper taps can't interleave cancel/schedule into duplicate reminders.
 let queue = Promise.resolve()
@@ -23,9 +24,16 @@ const schedule = (minutes: number | null, goal: number) => {
     .catch(e => console.warn('swipeout: could not schedule reminder', e))
 }
 
+// Visited tabs stay mounted: render from the last focused snapshot so a hidden tab does no work per swipe.
 export default function Profile() {
-  const t = useTheme()
   const { data, update } = useStore()
+  const shown = useRef(data)
+  if (useIsFocused()) shown.current = data
+  return <Body data={shown.current} update={update} />
+}
+
+const Body = memo(function Body({ data, update }: { data: Data; update: ReturnType<typeof useStore>['update'] }) {
+  const t = useTheme()
   const { level, into, span, points } = xp(data)
   const { reminder, haptics, motion } = data.settings
   const set = (patch: Partial<Settings>) => update(s => ({ ...s, settings: { ...s.settings, ...patch } }))
@@ -155,4 +163,4 @@ export default function Profile() {
       </ScrollView>
     </Screen>
   )
-}
+})

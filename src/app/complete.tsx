@@ -1,17 +1,16 @@
 import { router } from 'expo-router'
 import { useEffect } from 'react'
 import { Animated, ScrollView, StyleSheet, View, useAnimatedValue, useWindowDimensions } from 'react-native'
-import { ACHIEVEMENTS, FREEZE_EVERY, dayKey, nextBadge, stats, streak } from '../logic'
+import { ACHIEVEMENTS, dayKey, milestone, stats, streak } from '../logic'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
-import { Button, Card, Stat, Txt, buzz } from '../ui'
+import { Button, Card, Stat, Txt, buzz, center } from '../ui'
 
 const rnd = (i: number, k: number) => {
   const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453
   return x - Math.floor(x)
 }
 const PIECES = Array.from({ length: 36 }, (_, i) => ({ x: rnd(i, 1), start: rnd(i, 2) * 0.35, fall: 0.6 + rnd(i, 3) * 0.5, spin: (rnd(i, 4) - 0.5) * 1440, drift: (rnd(i, 5) - 0.5) * 80 }))
-const center = { textAlign: 'center' } as const
 
 export default function Complete() {
   const t = useTheme()
@@ -27,7 +26,6 @@ export default function Complete() {
 
   const today = dayKey()
   const s = streak(data.days, today)
-  const n = nextBadge(s)
   const { marked, pct } = stats(data)
   const fresh = ACHIEVEMENTS.filter(a => data.unlocked[a.id] === today)
   const colors = [t.coral, t.mint, t.lavender, '#FFFFFF']
@@ -40,9 +38,9 @@ export default function Complete() {
           <Txt v="title" accessibilityRole="header" style={center}>Goal complete!</Txt>
           <Txt style={center}>You reviewed {data.days[today]?.reviewed ?? 0} photos today.</Txt>
           <Txt v="h2">🔥 {s}-day streak</Txt>
-          {s > 0 && s % FREEZE_EVERY === 0 && data.freezes > 0 && <Txt style={center}>🧊 You earned a streak freeze!</Txt>}
+          {data.days[today]?.earned && <Txt style={center}>🧊 You earned a streak freeze!</Txt>}
           <Txt v="small" muted style={center}>
-            {n ? `Next milestone: ${n} days — ${n - s} more to unlock ${ACHIEVEMENTS.find(a => a.id === `streak${n}`)?.title}` : 'Every streak badge unlocked 👑'}
+            {milestone(s)}
           </Txt>
           <View style={{ flexDirection: 'row', alignSelf: 'stretch', backgroundColor: t.raised, borderRadius: 16, padding: 14 }}>
             <Stat value={data.days[today]?.reviewed ?? 0} label="Today" />

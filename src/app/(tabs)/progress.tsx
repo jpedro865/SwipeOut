@@ -1,24 +1,31 @@
-import { useState } from 'react'
+import { useIsFocused } from 'expo-router'
+import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, View, type ViewStyle } from 'react-native'
-import { ACHIEVEMENTS, MAX_FREEZES, dayKey, daysToFinish, longestStreak, met, nextBadge, parseDay, stats, streak } from '../../logic'
+import { ACHIEVEMENTS, MAX_FREEZES, dayKey, daysToFinish, longestStreak, met, milestone, parseDay, stats, streak, type Data } from '../../logic'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
-import { Bar, Card, Screen, Stat, Txt, fmtBytes } from '../../ui'
+import { Bar, Card, Screen, Stat, Txt, fmtBytes, fmtDay } from '../../ui'
 
 const WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const LADDER = ['r100', 'r500', 'r1000', 'half', 'hero']
 const row = { flexDirection: 'row', gap: 12 } as const
 const fmt = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString(undefined, o)
 
+// Visited tabs stay mounted: render from the last focused snapshot so a hidden tab does no work per swipe.
 export default function Progress() {
   const { data } = useStore()
+  const shown = useRef(data)
+  if (useIsFocused()) shown.current = data
+  return <Body data={shown.current} />
+}
+
+const Body = memo(function Body({ data }: { data: Data }) {
   const t = useTheme()
   const [back, setBack] = useState(0)
   const now = new Date()
   const today = dayKey(now)
   const s = stats(data)
   const cur = streak(data.days, today)
-  const next = nextBadge(cur)
   const earliest = Object.keys(data.days).sort()[0]
   const e = earliest ? parseDay(earliest) : now
   const maxBack = Math.max(0, (now.getFullYear() - e.getFullYear()) * 12 + now.getMonth() - e.getMonth())
@@ -60,11 +67,7 @@ export default function Progress() {
           <Txt muted>Longest: {longestStreak(data.days, today)}</Txt>
           <Txt>🧊 {data.freezes}/{MAX_FREEZES} streak freezes</Txt>
           <Txt v="small" muted>Earn one every 7 goal days in a row. It covers a missed day automatically.</Txt>
-          <Txt>
-            {next
-              ? `Next milestone: ${next} days — ${next - cur} more to unlock ${ACHIEVEMENTS.find(a => a.id === `streak${next}`)?.title}`
-              : 'Every streak badge unlocked 👑'}
-          </Txt>
+          <Txt>{milestone(cur)}</Txt>
         </Card>
 
         <Card>
@@ -122,7 +125,7 @@ export default function Progress() {
         <Card>
           <Txt v="h2">{s.reviewed.toLocaleString()} of {s.total.toLocaleString()} photos reviewed</Txt>
           <Bar value={s.pct} color={t.lavender} />
-          <Txt v="title">{Math.min(100, Math.floor(s.reviewed * 100 / (s.total || 1)))}%</Txt>
+          <Txt v="title">{Math.round(s.pct * 100)}%</Txt>
           <Txt muted>
             {!s.total
               ? 'Open the Swipe tab to load your library.'
@@ -132,7 +135,7 @@ export default function Progress() {
           </Txt>
           {ACHIEVEMENTS.filter(a => LADDER.includes(a.id)).map(a => {
             const on = data.unlocked[a.id]
-            const when = on && fmt(parseDay(on), { month: 'short', day: 'numeric' })
+            const when = on && fmtDay(on)
             return (
               <View
                 key={a.id}
@@ -155,4 +158,4 @@ export default function Progress() {
       </ScrollView>
     </Screen>
   )
-}
+})
