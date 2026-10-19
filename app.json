@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "app.swipeout",
+      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
       "adaptiveIcon": {
         "backgroundColor": "#171627",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -36,6 +37,7 @@
         {
           "photosPermission": "SwipeOut shows your photos one at a time so you can keep them or mark them for deletion. Photos never leave your device, and nothing is deleted until you confirm.",
           "savePhotosPermission": false,
+          "preventAutomaticLimitedAccessAlert": true,
           "granularPermissions": ["photo"]
         }
       ],
