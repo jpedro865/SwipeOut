@@ -1,10 +1,11 @@
 import { File } from 'expo-file-system'
-import { Asset, AssetField, MediaType, Query, getPermissionsAsync, presentPermissionsPicker, requestPermissionsAsync } from 'expo-media-library'
+import { Asset, AssetField, MediaType, Query, getPermissionsAsync, presentPermissionsPicker, requestPermissionsAsync, type PermissionResponse } from 'expo-media-library'
 import { Platform } from 'react-native'
 
 // Photos only; the same list must go to the plugin config and the runtime request on Android.
-export const getPermission = () => getPermissionsAsync(false, ['photo'])
-export const requestPermission = () => requestPermissionsAsync(false, ['photo'])
+// Typed as the module's response so accessPrivileges ('limited' on iOS / Android 14+) is visible; it is set at runtime.
+export const getPermission = () => getPermissionsAsync(false, ['photo']) as Promise<PermissionResponse>
+export const requestPermission = () => requestPermissionsAsync(false, ['photo']) as Promise<PermissionResponse>
 export const pickMorePhotos = () => presentPermissionsPicker(['photo']) // no-op unless access is limited
 
 const PAGE = 2000

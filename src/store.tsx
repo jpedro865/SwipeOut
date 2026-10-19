@@ -47,7 +47,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     load().then(d => setData(applyFreezes(d, dayKey())))
     const sub = AppState.addEventListener('change', st => {
-      if (st === 'active') setData(s => s && applyFreezes(s, dayKey()))
+      if (st === 'active') setData(s => s && { ...applyFreezes(s, dayKey()) }) // new object: re-render so 'today' rolls over
     })
     return () => sub.remove()
   }, [])

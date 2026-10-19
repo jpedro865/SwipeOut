@@ -148,7 +148,13 @@ export function setGoal(s: Data, goal: number, today: string): Data {
   return { ...s, goal, days: day ? { ...s.days, [today]: { ...day, goal } } : s.days }
 }
 
-export const setLibrary = (s: Data, library: number, today: string) => unlock({ ...s, library }, today)
+// Marks on photos that left the library (deleted elsewhere, or outside a limited selection) can't be acted on: drop them.
+export function setLibrary(s: Data, ids: string[], today: string): Data {
+  const present = new Set(ids)
+  const decisions = { ...s.decisions }
+  for (const id in decisions) if (decisions[id] === 'delete' && !present.has(id)) delete decisions[id]
+  return unlock({ ...s, decisions, library: ids.length }, today)
+}
 
 // On open: spend freezes on missed days since the last goal day, but only if they cover the whole gap.
 export function applyFreezes(s: Data, today: string): Data {

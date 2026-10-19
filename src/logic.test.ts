@@ -1,5 +1,5 @@
 // Run: npm test  (plain node + asserts, no framework)
-import { addDays, applyFreezes, decide, initialData, longestStreak, markDeleted, setGoal, stats, streak, undo, xp, type Data } from './logic.ts'
+import { addDays, applyFreezes, decide, initialData, longestStreak, markDeleted, setGoal, setLibrary, stats, streak, undo, xp, type Data } from './logic.ts'
 
 const eq = (a: unknown, b: unknown) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${JSON.stringify(a)} !== ${JSON.stringify(b)}`)
@@ -64,14 +64,18 @@ s = goal(s, T, 30)
 eq(streak(s.days, T), 0)
 s = setGoal(s, 25, T)
 eq(streak(s.days, T), 1)
+s = setLibrary(s, Object.keys(s.decisions).concat('new-photo'), T)
+eq(s.library, 31)
+s = setLibrary(s, Object.keys(s.decisions).filter(id => id !== '2026-03-10-6'), T) // a marked photo vanished
+eq(s.decisions['2026-03-10-6'], undefined)
 s = { ...s, library: 30 }
 s = markDeleted(s, ['2026-03-10-0', '2026-03-10-3'], 5_000_000, T)
 eq(
   { ...stats(s) },
-  { reviewed: 30, keep: 20, marked: 8, deleted: 2, total: 30, pct: 1 },
+  { reviewed: 29, keep: 20, marked: 7, deleted: 2, total: 30, pct: 29 / 30 },
 )
 eq(s.library, 28)
-ok(s.unlocked.hero && s.unlocked.half)
+ok(s.unlocked.half && s.unlocked.hero) // every remaining photo was reviewed when the library shrank to 29
 
 // levels: 0 → L1, 100 → L2, 300 → L3
 eq(xp({ ...initialData }).level, 1)
