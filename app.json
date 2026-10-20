@@ -12,6 +12,9 @@
       "bundleIdentifier": "app.swipeout",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true
       }
     },
     "android": {
@@ -57,7 +60,17 @@
           "recordAudioAndroid": false,
           "enableBackgroundPlayback": false
         }
+      ],
+      [
+        "expo-localization",
+        {
+          "supportsRTL": false,
+          "supportedLocales": ["en", "fr"]
+        }
       ]
-    ]
+    ],
+    "locales": {
+      "fr": "./assets/locales/fr.json"
+    }
   }
 }

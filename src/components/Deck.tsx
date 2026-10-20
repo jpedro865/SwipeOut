@@ -1,6 +1,7 @@
 import { Image } from 'expo-image'
 import { useImperativeHandle, useLayoutEffect, useMemo, useRef, type Ref } from 'react'
 import { Animated, PanResponder, StyleSheet, useAnimatedValueXY, useWindowDimensions, View, type ViewStyle } from 'react-native'
+import { t } from '../i18n'
 import { useTheme } from '../theme'
 import { Icon } from '../ui'
 
@@ -92,8 +93,8 @@ export function Deck({ ids, onDecide, onFling, onArm, motion, label, ref }: {
       accessible
       accessibilityRole="image"
       accessibilityLabel={label}
-      accessibilityHint="Swipe right to keep, left to mark for deletion"
-      accessibilityActions={[{ name: 'keep', label: 'Keep' }, { name: 'delete', label: 'Mark for deletion' }]}
+      accessibilityHint={t('deck.hint')}
+      accessibilityActions={[{ name: 'keep', label: t('swipe.keep') }, { name: 'delete', label: t('swipe.delete') }]}
       onAccessibilityAction={e => fling(e.nativeEvent.actionName as Choice)}
     >
       {ids.map((id, i) => {

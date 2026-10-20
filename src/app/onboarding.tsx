@@ -1,21 +1,36 @@
 import { Image } from 'expo-image'
 import { useEffect, useState, type ReactNode } from 'react'
-import { BackHandler, Pressable, ScrollView, View } from 'react-native'
+import { Animated, BackHandler, Pressable, ScrollView, View, useAnimatedValue } from 'react-native'
+import { t, type Key } from '../i18n'
 import { GOALS, dayKey, setGoal } from '../logic'
 import { requestPermission } from '../media'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
-import { Button, Card, Screen, Txt, center } from '../ui'
+import { Button, Card, Icon, Screen, Txt, center, type IconName } from '../ui'
 
-const BLURBS: Record<number, string> = { 25: 'A quick tidy · ~2 min', 50: 'Steady progress · ~4 min', 100: 'Big push · ~7 min', 200: 'Power cleanup · ~14 min' }
+const MINUTES: Record<number, number> = { 25: 2, 50: 4, 100: 7, 200: 14 }
 
 export default function Onboarding() {
-  const t = useTheme()
+  const th = useTheme()
   const { data, update } = useStore()
   const [step, setStep] = useState(0)
   const [goal, setPick] = useState(data.goal)
   const [busy, setBusy] = useState(false)
   const next = () => setStep(step + 1)
+
+  // The welcome card sways left and right: the gesture, shown without words.
+  const sway = useAnimatedValue(0)
+  useEffect(() => {
+    if (!data.settings.motion) return
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(sway, { toValue: -1, duration: 700, useNativeDriver: true }),
+      Animated.timing(sway, { toValue: 1, duration: 1400, useNativeDriver: true }),
+      Animated.timing(sway, { toValue: 0, duration: 700, useNativeDriver: true }),
+      Animated.delay(600),
+    ]))
+    loop.start()
+    return () => loop.stop()
+  }, [sway, data.settings.motion])
 
   // Android back steps back through onboarding; on the first step it falls through and leaves the app.
   useEffect(() => {
@@ -34,56 +49,72 @@ export default function Onboarding() {
     update(s => ({ ...setGoal(s, goal, dayKey()), onboarded: true }))
   }
 
+  const bubble = (icon: IconName, color: string, size = 48) => (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon n={icon} size={size * 0.5} color={th.midnight} />
+    </View>
+  )
+
   const pages: [string, () => void, ReactNode][] = [
-    ['Get started', next, <>
-      <Image source={require('../../assets/splash-icon.png')} style={{ width: 180, height: 180, alignSelf: 'center' }} />
-      <Txt v="big" style={center}><Txt v="big" color={t.coral}>Swipe</Txt>Out</Txt>
-      <Txt v="h2" style={center}>Swipe the clutter away.</Txt>
-      <Txt muted style={center}>Turn an overwhelming camera roll into a small daily habit — a few swipes a day, and it adds up.</Txt>
+    [t('onb.start'), next, <>
+      <Animated.View style={{ alignSelf: 'center', transform: [{ translateX: sway.interpolate({ inputRange: [-1, 1], outputRange: [-18, 18] }) }, { rotate: sway.interpolate({ inputRange: [-1, 1], outputRange: ['-7deg', '7deg'] }) }] }}>
+        <Image source={require('../../assets/splash-icon.png')} style={{ width: 180, height: 180 }} />
+      </Animated.View>
+      <Txt v="big" style={center}><Txt v="big" color={th.coral}>Swipe</Txt>Out</Txt>
+      <Txt v="h2" style={center}>{t('onb.tagline')}</Txt>
+      <Txt muted style={center}>{t('onb.intro')}</Txt>
     </>],
-    ['Next', next, <>
-      <Txt v="title">How it works</Txt>
-      {[['👈', 'Swipe left to mark a photo for deletion'], ['👉', 'Swipe right to keep it'], ['🛡️', 'Nothing is deleted until you review and confirm']].map(([icon, text]) => (
+    [t('onb.next'), next, <>
+      <Txt v="title">{t('onb.how')}</Txt>
+      {([['trash', th.coral, 'onb.how1'], ['keep', th.mint, 'onb.how2'], ['safe', th.lavender, 'onb.how3']] as [IconName, string, Key][]).map(([icon, color, text]) => (
         <Card key={icon} style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <Txt v="title">{icon}</Txt>
-          <Txt v="h2" style={{ flex: 1 }}>{text}</Txt>
+          {bubble(icon, color)}
+          <Txt v="h2" style={{ flex: 1 }}>{t(text)}</Txt>
         </Card>
       ))}
     </>],
-    ['Next', next, <>
-      <Txt v="title">Pick a daily goal</Txt>
+    [t('onb.next'), next, <>
+      <Txt v="title">{t('onb.pickGoal')}</Txt>
       <View accessibilityRole="radiogroup" style={{ gap: 12 }}>
         {GOALS.map(n => {
           const on = n === goal
+          const blurb = t(`onb.blurb${n}` as Key)
+          const time = t('onb.minutes', { n: MINUTES[n] })
           return (
             <Pressable
               key={n}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
-              accessibilityLabel={`${n} photos a day. ${BLURBS[n]}`}
+              accessibilityLabel={`${t('profile.perDay', { n })}. ${blurb}, ${time}`}
               onPress={() => setPick(n)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 18, borderRadius: 24, backgroundColor: t.card, borderWidth: 2, borderColor: on ? t.coral : t.line }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 18, borderRadius: 24, backgroundColor: th.card, borderWidth: 2, borderColor: on ? th.coral : th.line }}
             >
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, gap: 2 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
                   <Txt v="title">{n}</Txt>
-                  <Txt muted>photos a day</Txt>
+                  <Txt muted>{t('onb.aDay')}</Txt>
                 </View>
-                <Txt v="small" muted>{BLURBS[n]}</Txt>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Txt v="small" muted>{blurb}</Txt>
+                  <Icon n="time" size={12} color={th.muted} />
+                  <Txt v="small" muted>{time}</Txt>
+                </View>
               </View>
-              <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.coral : 'transparent', borderWidth: on ? 0 : 2, borderColor: t.line }}>
-                {on && <Txt v="small" color={t.midnight} style={{ fontWeight: '800' }}>✓</Txt>}
+              <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? th.coral : 'transparent', borderWidth: on ? 0 : 2, borderColor: th.line }}>
+                {on && <Icon n="keep" size={15} color={th.midnight} weight="bold" />}
               </View>
             </Pressable>
           )
         })}
       </View>
-      <Txt v="small" muted style={center}>You can change this anytime.</Txt>
+      <Txt v="small" muted style={center}>{t('onb.anytime')}</Txt>
     </>],
-    ['Allow photo access', finish, <>
-      <Txt v="big" style={center}>📸</Txt>
-      <Txt v="title" style={center}>Let SwipeOut see your photos</Txt>
-      <Txt muted style={center}>Photos stay on your device. Access is only used to show them to you one at a time and to delete the ones you confirm.</Txt>
+    [t('swipe.allow'), finish, <>
+      <View style={{ alignSelf: 'center', width: 112, height: 112, borderRadius: 56, backgroundColor: th.coral + '26', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon n="library" size={52} color={th.coral} />
+      </View>
+      <Txt v="title" style={center}>{t('onb.accessTitle')}</Txt>
+      <Txt muted style={center}>{t('onb.accessBody')}</Txt>
     </>],
   ]
   const [cta, onPress, body] = pages[step]
@@ -92,16 +123,21 @@ export default function Onboarding() {
     <Screen edges={['top', 'bottom']}>
       <View style={{ height: 44, paddingHorizontal: 16, justifyContent: 'center' }}>
         {step > 0 && (
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => setStep(step - 1)} style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
-            <Txt muted>‹ Back</Txt>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('onb.back')}
+            onPress={() => setStep(step - 1)}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: th.raised, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon n="back" size={18} />
           </Pressable>
         )}
       </View>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24, gap: 16 }}>{body}</ScrollView>
       <View style={{ padding: 24, paddingTop: 8, gap: 20 }}>
-        <View accessible accessibilityLabel={`Step ${step + 1} of ${pages.length}`} style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
+        <View accessible accessibilityLabel={t('onb.step', { n: step + 1, total: pages.length })} style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
           {pages.map((_, i) => (
-            <View key={i} style={{ width: i === step ? 24 : 8, height: 8, borderRadius: 4, backgroundColor: i === step ? t.coral : t.line }} />
+            <View key={i} style={{ width: i === step ? 24 : 8, height: 8, borderRadius: 4, backgroundColor: i === step ? th.coral : th.line }} />
           ))}
         </View>
         <Button title={cta} onPress={onPress} disabled={busy} />

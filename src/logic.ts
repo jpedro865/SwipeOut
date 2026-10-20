@@ -87,25 +87,25 @@ export function stats(s: Data) {
 }
 
 type Ctx = ReturnType<typeof stats> & { longest: number }
-type Achievement = { id: string; icon: string; title: string; desc: string; test: (c: Ctx) => boolean }
+// Titles and descriptions live in i18n.ts, keyed by id.
+type Achievement = { id: string; icon: string; test: (c: Ctx) => boolean }
 
-const badge = (days: number, icon: string, title: string): Achievement =>
-  ({ id: `streak${days}`, icon, title, desc: `${days}-day streak`, test: c => c.longest >= days })
+const badge = (days: number, icon: string): Achievement => ({ id: `streak${days}`, icon, test: c => c.longest >= days })
 
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'r100', icon: '📸', title: 'Photo Rookie', desc: "First 100 reviewed. You're officially underway.", test: c => c.reviewed >= 100 },
-  { id: 'r500', icon: '🌊', title: 'Momentum', desc: "500 reviewed. You're building momentum.", test: c => c.reviewed >= 500 },
-  { id: 'r1000', icon: '🧹', title: 'Big Cleanup', desc: '1,000 reviewed. The big cleanup is working.', test: c => c.reviewed >= 1000 },
-  { id: 'half', icon: '🌗', title: 'Halfway There', desc: "50% of your library reviewed.", test: c => c.total > 0 && c.pct >= 0.5 },
-  { id: 'hero', icon: '🦸', title: 'Camera Roll Hero', desc: 'Your selected library is fully reviewed.', test: c => c.total > 0 && c.pct >= 1 },
-  { id: 'd100', icon: '💥', title: 'Clutter Crusher', desc: '100 photos deleted for good.', test: c => c.deleted >= 100 },
-  { id: 'k500', icon: '💜', title: 'Memory Keeper', desc: '500 photos kept.', test: c => c.keep >= 500 },
-  badge(3, '🔥', 'Spark'),
-  badge(7, '⚡', 'One Week Wonder'),
-  badge(14, '💪', 'Fortnight Force'),
-  badge(30, '🌙', 'Monthly Master'),
-  badge(60, '🚀', 'Unstoppable'),
-  badge(100, '👑', 'Gallery Legend'),
+  { id: 'r100', icon: '📸', test: c => c.reviewed >= 100 },
+  { id: 'r500', icon: '🌊', test: c => c.reviewed >= 500 },
+  { id: 'r1000', icon: '🧹', test: c => c.reviewed >= 1000 },
+  { id: 'half', icon: '🌗', test: c => c.total > 0 && c.pct >= 0.5 },
+  { id: 'hero', icon: '🦸', test: c => c.total > 0 && c.pct >= 1 },
+  { id: 'd100', icon: '💥', test: c => c.deleted >= 100 },
+  { id: 'k500', icon: '💜', test: c => c.keep >= 500 },
+  badge(3, '🔥'),
+  badge(7, '⚡'),
+  badge(14, '💪'),
+  badge(30, '🌙'),
+  badge(60, '🚀'),
+  badge(100, '👑'),
 ]
 
 function unlock(s: Data, today: string): Data {
@@ -176,13 +176,6 @@ export function applyFreezes(s: Data, today: string): Data {
 }
 
 export const nextBadge = (current: number) => STREAK_BADGES.find(n => n > current) ?? null
-
-export function milestone(current: number) {
-  const n = nextBadge(current)
-  return n
-    ? `Next milestone: ${n} days — ${n - current} more to unlock ${ACHIEVEMENTS.find(a => a.id === `streak${n}`)?.title}`
-    : 'Every streak badge unlocked 👑'
-}
 
 // Level n needs 50·n·(n-1) XP: 0, 100, 300, 600, 1000…
 export function xp(s: Data) {

@@ -1,0 +1,5 @@
+{
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "SwipeOut présente les photos une à une pour les trier : à garder ou à supprimer. Elles ne quittent jamais l’appareil, et rien n’est supprimé sans confirmation."
+  }
+}

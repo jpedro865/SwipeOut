@@ -1,11 +1,12 @@
 import { router } from 'expo-router'
 import { useEffect } from 'react'
 import { Animated, ScrollView, StyleSheet, View, useAnimatedValue, useWindowDimensions } from 'react-native'
-import { ACHIEVEMENTS, dayKey, milestone, stats, streak } from '../logic'
+import { achTitle, fmtPct, milestone, t } from '../i18n'
+import { ACHIEVEMENTS, dayKey, stats, streak } from '../logic'
 import { play } from '../sound'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
-import { Button, Card, Stat, Txt, buzz, center } from '../ui'
+import { Button, Card, Icon, Stat, Txt, buzz, center } from '../ui'
 
 const rnd = (i: number, k: number) => {
   const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453
@@ -14,7 +15,7 @@ const rnd = (i: number, k: number) => {
 const PIECES = Array.from({ length: 36 }, (_, i) => ({ x: rnd(i, 1), start: rnd(i, 2) * 0.35, fall: 0.6 + rnd(i, 3) * 0.5, spin: (rnd(i, 4) - 0.5) * 1440, drift: (rnd(i, 5) - 0.5) * 80 }))
 
 export default function Complete() {
-  const t = useTheme()
+  const th = useTheme()
   const { data } = useStore()
   const { width, height } = useWindowDimensions()
   const p = useAnimatedValue(0)
@@ -30,36 +31,41 @@ export default function Complete() {
   const s = streak(data.days, today)
   const { marked, pct } = stats(data)
   const fresh = ACHIEVEMENTS.filter(a => data.unlocked[a.id] === today)
-  const colors = [t.coral, t.mint, t.lavender, '#FFFFFF']
+  const colors = [th.coral, th.mint, th.lavender, '#FFFFFF']
+  const chip = { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: th.raised, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 } as const
 
   return (
     <View accessibilityViewIsModal style={{ flex: 1 }}>
-      <ScrollView style={{ flex: 1, backgroundColor: t.midnight + 'D9' }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
-        <Card style={{ alignItems: 'center', width: '100%', maxWidth: 420, alignSelf: 'center' }}>
-          <Txt v="big">🎉</Txt>
-          <Txt v="title" accessibilityRole="header" style={center}>Goal complete!</Txt>
-          <Txt style={center}>You reviewed {data.days[today]?.reviewed ?? 0} photos today.</Txt>
-          <Txt v="h2">🔥 {s}-day streak</Txt>
-          {data.days[today]?.earned && <Txt style={center}>🧊 You earned a streak freeze!</Txt>}
-          <Txt v="small" muted style={center}>
-            {milestone(s)}
-          </Txt>
-          <View style={{ flexDirection: 'row', alignSelf: 'stretch', backgroundColor: t.raised, borderRadius: 16, padding: 14 }}>
-            <Stat value={data.days[today]?.reviewed ?? 0} label="Today" />
-            <Stat value={marked} label="Marked" />
-            <Stat value={`${Math.round(pct * 100)}%`} label="Library" />
+      <ScrollView style={{ flex: 1, backgroundColor: th.midnight + 'D9' }} contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
+        <Card style={{ alignItems: 'center', width: '100%', maxWidth: 420, alignSelf: 'center', gap: 14 }}>
+          <View style={{ width: 104, height: 104, borderRadius: 52, backgroundColor: th.coral + '26', alignItems: 'center', justifyContent: 'center' }}>
+            <Icon n="celebrate" size={56} color={th.coral} bounce={motion} />
           </View>
-          {fresh.length > 0 && (
+          <Txt v="title" accessibilityRole="header" style={center}>{t('complete.title')}</Txt>
+          <View style={{ flexDirection: 'row', alignSelf: 'stretch', backgroundColor: th.raised, borderRadius: 16, padding: 14, gap: 8 }}>
+            <Stat icon="streak" color={th.coral} value={s} label={t('complete.streak')} />
+            <Stat icon="photos" color={th.lavender} value={data.days[today]?.reviewed ?? 0} label={t('complete.today')} />
+            <Stat icon="trash" color={th.coral} value={marked} label={t('complete.marked')} />
+            <Stat icon="library" color={th.mint} value={fmtPct(pct)} label={t('complete.library')} />
+          </View>
+          <Txt v="small" muted style={center}>{milestone(s)}</Txt>
+          {(data.days[today]?.earned || fresh.length > 0) && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+              {data.days[today]?.earned && (
+                <View style={chip}>
+                  <Icon n="freeze" size={14} color={th.lavender} />
+                  <Txt v="small" style={{ fontWeight: '700' }}>{t('complete.freeze')}</Txt>
+                </View>
+              )}
               {fresh.map(a => (
-                <View key={a.id} style={{ backgroundColor: t.raised, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 }}>
-                  <Txt v="small">{a.icon} {a.title}</Txt>
+                <View key={a.id} style={chip}>
+                  <Txt v="small">{a.icon} {achTitle(a.id)}</Txt>
                 </View>
               ))}
             </View>
           )}
-          <Button title="Keep swiping" onPress={() => router.back()} style={{ alignSelf: 'stretch' }} />
-          {marked > 0 && <Button title={`Review ${marked} marked`} outline onPress={() => router.replace('/review')} style={{ alignSelf: 'stretch' }} />}
+          <Button title={t('complete.continue')} onPress={() => router.back()} style={{ alignSelf: 'stretch' }} />
+          {marked > 0 && <Button icon="trash" title={t('swipe.review', { n: marked })} outline onPress={() => router.replace('/review')} style={{ alignSelf: 'stretch' }} />}
         </Card>
       </ScrollView>
       {motion && (

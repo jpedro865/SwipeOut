@@ -2,18 +2,18 @@ import { Image } from 'expo-image'
 import { router } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { Alert, FlatList, Modal, Platform, Pressable, View } from 'react-native'
+import { fmtBytes, fmtNum, t } from '../i18n'
 import { dayKey, markDeleted, setDecision } from '../logic'
 import { allPhotoIds, deletePhotos, sizeOf } from '../media'
 import { play } from '../sound'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
-import { Button, Screen, Txt, buzz, center, fmtBytes } from '../ui'
+import { Button, Icon, Screen, Txt, buzz, center } from '../ui'
 
-const photos = (n: number) => `${n} photo${n === 1 ? '' : 's'}`
 const sum = (ids: string[], sizes: Record<string, number>) => ids.reduce((a, id) => a + (sizes[id] ?? 0), 0)
 
 export default function Review() {
-  const t = useTheme()
+  const th = useTheme()
   const { data, update } = useStore()
   const [ids] = useState(() => Object.keys(data.decisions).filter(id => data.decisions[id] === 'delete'))
   const known = useRef<Record<string, number>>({})
@@ -74,40 +74,62 @@ export default function Review() {
 
   const confirm = () =>
     Alert.alert(
-      `Delete ${photos(n)}?`,
-      Platform.OS === 'ios' ? "They'll move to Recently Deleted in Photos, where you can recover them for 30 days." : 'This permanently removes them from your device.',
-      [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: remove }],
+      t('review.confirm', { n }),
+      t(Platform.OS === 'ios' ? 'review.confirmIos' : 'review.confirmAndroid', { n }),
+      [{ text: t('common.cancel'), style: 'cancel' }, { text: t('common.delete'), style: 'destructive', onPress: remove }],
     )
 
   return (
     <Screen edges={['top', 'bottom']}>
       <View style={{ padding: 20, paddingBottom: 12, gap: 6 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Txt v="title" accessibilityRole="header">Review & delete</Txt>
+          <Txt v="title" accessibilityRole="header" style={{ flex: 1 }}>{t('review.title')}</Txt>
           <Pressable
             onPress={() => router.back()}
             accessibilityRole="button"
-            accessibilityLabel="Close"
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: t.raised, alignItems: 'center', justifyContent: 'center' }}
+            accessibilityLabel={t('common.close')}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: th.raised, alignItems: 'center', justifyContent: 'center' }}
           >
-            <Txt v="h2">✕</Txt>
+            <Icon n="close" size={18} weight="bold" />
           </Pressable>
         </View>
-        {!done && ids.length > 0 && <Txt muted>Tap a photo to keep it. Nothing is deleted until you confirm.</Txt>}
+        {!done && ids.length > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Icon n="tap" size={15} color={th.muted} />
+            <Txt muted style={{ flex: 1 }}>{t('review.help')}</Txt>
+          </View>
+        )}
       </View>
 
       {done || !ids.length ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 12 }}>
           {done ? (
             <>
-              <Txt v="title" style={center}>{done.n ? `🎉 ${photos(done.n)} cleared` : 'Nothing was deleted.'}</Txt>
-              {done.bytes > 0 && <Txt muted style={center}>≈ {fmtBytes(done.bytes)} freed</Txt>}
-              {done.stuck > 0 && <Txt muted style={center}>{photos(done.stuck)} couldn't be deleted and stay marked.</Txt>}
+              {done.n > 0 && (
+                <View style={{ width: 112, height: 112, borderRadius: 56, backgroundColor: th.mint + '26', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon n="sparkles" size={56} color={th.mint} bounce={data.settings.motion} />
+                </View>
+              )}
+              {done.n ? (
+                <View accessible style={{ alignItems: 'center' }}>
+                  <Txt v="big">{fmtNum(done.n)}</Txt>
+                  <Txt v="h2" muted>{t('review.cleared', { n: done.n })}</Txt>
+                </View>
+              ) : (
+                <Txt v="title" style={center}>{t('review.nothing')}</Txt>
+              )}
+              {done.bytes > 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Icon n="storage" size={18} color={th.mint} />
+                  <Txt v="h2">{t('review.freed', { size: fmtBytes(done.bytes) })}</Txt>
+                </View>
+              )}
+              {done.stuck > 0 && <Txt muted style={center}>{t('review.stuck', { n: done.stuck })}</Txt>}
             </>
           ) : (
-            <Txt style={center}>Nothing marked yet. Swipe left on photos you don't need.</Txt>
+            <Txt style={center}>{t('review.none')}</Txt>
           )}
-          <Button title="Done" onPress={() => router.back()} style={{ alignSelf: 'stretch', marginTop: 12 }} />
+          <Button title={t('review.done')} onPress={() => router.back()} style={{ alignSelf: 'stretch', marginTop: 12 }} />
         </View>
       ) : (
         <>
@@ -124,33 +146,34 @@ export default function Review() {
                   onPress={() => toggle(item)}
                   onLongPress={() => setPreview(item)}
                   accessibilityRole="button"
-                  accessibilityLabel={kept ? 'Photo, kept' : 'Photo, marked for deletion'}
-                  accessibilityHint="Tap to toggle. Long-press to preview."
+                  accessibilityLabel={t(kept ? 'review.kept' : 'review.markedPhoto')}
+                  accessibilityHint={t('review.gridHint')}
                   style={{ width: '33.333%', aspectRatio: 1, padding: 2 }}
                 >
                   <Image source={{ uri: item }} contentFit="cover" recyclingKey={item} style={{ flex: 1, borderRadius: 12, opacity: kept ? 0.35 : 1 }} />
-                  {kept && (
-                    <View style={{ position: 'absolute', left: 8, bottom: 8, backgroundColor: t.mint, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
-                      <Txt v="small" color={t.midnight} style={{ fontWeight: '700' }}>✓ Kept</Txt>
-                    </View>
-                  )}
+                  <View style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, backgroundColor: kept ? th.mint : th.coral, alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon n={kept ? 'keep' : 'trash'} size={13} color={th.midnight} weight="bold" />
+                  </View>
                 </Pressable>
               )
             }}
           />
-          <View style={{ padding: 20, paddingBottom: 12, gap: 10, borderTopWidth: 1, borderColor: t.line }}>
-            {failed && <Txt style={center}>Nothing was deleted.</Txt>}
-            {sizes ? !!bytes && <Txt muted style={center}>≈ {fmtBytes(bytes)} to free</Txt> : <Txt muted style={center}>Estimating size…</Txt>}
+          <View style={{ padding: 20, paddingBottom: 12, gap: 12, borderTopWidth: 1, borderColor: th.line }}>
+            {failed && <Txt style={center}>{t('review.nothing')}</Txt>}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 26 }}>
+              <Icon n="storage" size={18} color={th.mint} />
+              {sizes ? !!bytes && <Txt v="h2">{t('review.toFree', { size: fmtBytes(bytes) })}</Txt> : <Txt muted>{t('review.estimating')}</Txt>}
+            </View>
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Button title="Keep all" outline disabled={busy} onPress={() => update(s => ids.reduce((s, id) => setDecision(s, id, 'keep'), s))} style={{ flex: 1 }} />
-              <Button title={busy ? 'Deleting…' : `Delete ${photos(n)}`} disabled={!n || busy} onPress={confirm} style={{ flex: 2 }} />
+              <Button icon="keep" title={t('review.keepAll')} outline disabled={busy} onPress={() => update(s => ids.reduce((s, id) => setDecision(s, id, 'keep'), s))} style={{ flex: 1, paddingHorizontal: 12 }} />
+              <Button icon="trash" title={busy ? t('review.deleting') : t('review.deleteN', { n })} disabled={!n || busy} onPress={confirm} style={{ flex: 1.4, paddingHorizontal: 12 }} />
             </View>
           </View>
         </>
       )}
 
       <Modal visible={!!preview} animationType="fade" onRequestClose={() => setPreview(null)}>
-        <Pressable onPress={() => setPreview(null)} accessibilityRole="button" accessibilityLabel="Close preview" style={{ flex: 1, backgroundColor: '#000' }}>
+        <Pressable onPress={() => setPreview(null)} accessibilityRole="button" accessibilityLabel={t('review.closePreview')} style={{ flex: 1, backgroundColor: '#000' }}>
           {preview && <Image source={{ uri: preview }} contentFit="contain" style={{ flex: 1 }} />}
         </Pressable>
       </Modal>

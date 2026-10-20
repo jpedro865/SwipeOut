@@ -3,7 +3,7 @@ import { SymbolView, type AndroidSymbol, type SFSymbol, type SymbolWeight } from
 import type { ReactNode } from 'react'
 import { Platform, Pressable, Text, View, useWindowDimensions, type StyleProp, type TextProps, type ViewStyle } from 'react-native'
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context'
-import { parseDay } from './logic'
+import { fmtNum } from './i18n'
 import { useTheme } from './theme'
 
 export function Screen({ children, edges = ['top'] }: { children: ReactNode; edges?: Edge[] }) {
@@ -60,7 +60,7 @@ export type IconName = keyof typeof ICONS
 
 // Decorative: the control around it carries the accessibility label. Android takes no weight (each is a ~1 MB font).
 // Android draws the glyph as scalable text in a fixed box, so cancel the system font scale to keep it inside.
-export function Icon({ n, size = 20, color, weight = 'semibold' }: { n: IconName; size?: number; color?: string; weight?: SymbolWeight }) {
+export function Icon({ n, size = 20, color, weight = 'semibold', bounce }: { n: IconName; size?: number; color?: string; weight?: SymbolWeight; bounce?: boolean }) {
   const t = useTheme()
   const { fontScale } = useWindowDimensions()
   const [ios, android] = ICONS[n]
@@ -71,6 +71,7 @@ export function Icon({ n, size = 20, color, weight = 'semibold' }: { n: IconName
       {...box}
       tintColor={color ?? t.text}
       weight={weight}
+      animationSpec={bounce ? { effect: { type: 'bounce' } } : undefined}
       accessible={false}
       importantForAccessibility="no"
     />
@@ -150,7 +151,7 @@ export function Stat({ value, label, icon, color }: { value: string | number; la
   return (
     <View accessible accessibilityLabel={`${value}, ${label}`} style={{ flex: 1, gap: 2 }}>
       {icon && <Icon n={icon} size={18} color={color} />}
-      <Txt v="title" numberOfLines={1} adjustsFontSizeToFit>{typeof value === 'number' ? value.toLocaleString() : value}</Txt>
+      <Txt v="title" numberOfLines={1} adjustsFontSizeToFit>{typeof value === 'number' ? fmtNum(value) : value}</Txt>
       <Txt v="small" muted numberOfLines={2}>{label}</Txt>
     </View>
   )
@@ -178,14 +179,6 @@ export function Row({ icon, tile, label, value, children, onPress }: { icon: Ico
 }
 
 export const center = { textAlign: 'center' } as const
-
-export const fmtDay = (k: string) => parseDay(k).toLocaleDateString([], { month: 'short', day: 'numeric' })
-
-export function fmtBytes(n: number) {
-  if (n < 1e6) return `${Math.round(n / 1e3)} KB`
-  if (n < 1e9) return `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`
-  return `${(n / 1e9).toFixed(2)} GB`
-}
 
 // Each kind matches a sound: keep = crisp, delete = damped (never Heavy or Reject, which read as an error), select = undo/toggles.
 // Android's Vibrator makes every impact feel the same, so use its haptic engine there (Confirm needs API 30).

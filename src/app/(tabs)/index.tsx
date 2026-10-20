@@ -3,6 +3,7 @@ import { router, useIsFocused } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, ActivityIndicator, Animated, AppState, Linking, Platform, Pressable, Text, View, useAnimatedValue } from 'react-native'
 import { Deck, type Choice, type DeckRef } from '../../components/Deck'
+import { achTitle, fmtNum, t } from '../../i18n'
 import { ACHIEVEMENTS, CHEERS, dayKey, decide, met, setLibrary, stats, streak, undo } from '../../logic'
 import { allPhotoIds, getPermission, pickMorePhotos, requestPermission } from '../../media'
 import { play } from '../../sound'
@@ -69,7 +70,8 @@ export default function Swipe() {
     if (!focused) return // celebrate on return instead of dropping it
     if (unlocked.length > seen.current) {
       const a = ACHIEVEMENTS.find(a => a.id === unlocked[unlocked.length - 1])
-      setToast({ emoji: a?.icon, text: a?.title ?? '', say: `Achievement unlocked: ${a?.title}` })
+      const title = a ? achTitle(a.id) : ''
+      setToast({ emoji: a?.icon, text: title, say: t('swipe.unlocked', { title }) })
       play('achievement', sounds)
       buzz(haptics, 'success')
     }
@@ -92,7 +94,7 @@ export default function Swipe() {
   const onFling = (choice: Choice) => {
     play(choice, sounds)
     buzz(haptics, choice === 'keep' ? 'tap' : 'soft')
-    AccessibilityInfo.announceForAccessibility(choice === 'keep' ? 'Kept' : 'Marked for deletion') // focus stays on the deck, so say it
+    AccessibilityInfo.announceForAccessibility(t(choice === 'keep' ? 'swipe.didKeep' : 'swipe.didDelete')) // focus stays on the deck, so say it
   }
 
   const onDecide = (choice: Choice) => {
@@ -107,7 +109,7 @@ export default function Swipe() {
       // The goal screen lists this swipe's unlocks and plays its own sound: one celebration at a time.
       seen.current = Object.keys(decide(data, ids[0], choice, k).unlocked).length
       router.push('/complete')
-    } else if (CHEERS.includes(n)) setToast({ icon: 'sparkles', text: `${n} today`, say: `${n} photos reviewed today` })
+    } else if (CHEERS.includes(n)) setToast({ icon: 'sparkles', text: t('swipe.cheer', { n }), say: t('swipe.cheerSay', { n }) })
   }
 
   // The undo stack is the queue itself: everything before idx was decided this session.
@@ -175,17 +177,17 @@ export default function Swipe() {
             <Animated.View style={{ transform: [{ scale: bump }] }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${s.marked} marked for deletion. Nothing is deleted until you review.`}
+                accessibilityLabel={t('swipe.marked', { n: s.marked })}
                 onPress={() => router.push('/review')}
                 hitSlop={4}
                 style={({ pressed }) => [pill, { opacity: pressed ? 0.7 : 1 }]}
               >
                 <Icon n="trash" size={16} color={th.coral} />
-                <Txt v="h2">{s.marked.toLocaleString()}</Txt>
+                <Txt v="h2">{fmtNum(s.marked)}</Txt>
               </Pressable>
             </Animated.View>
           )}
-          <View accessible accessibilityLabel={`${st}-day streak${data.freezes ? `, ${data.freezes} streak freezes` : ''}`} style={pill}>
+          <View accessible accessibilityLabel={t('swipe.streak', { n: st }) + (data.freezes ? t('swipe.freezes', { n: data.freezes }) : '')} style={pill}>
             <Icon n="streak" size={16} color={th.coral} />
             <Txt v="h2">{st}</Txt>
             {data.freezes > 0 && (
@@ -198,7 +200,7 @@ export default function Swipe() {
         </View>
 
         <Card style={{ padding: 12, paddingHorizontal: 14, gap: 8, borderRadius: 20 }}>
-          <View accessible accessibilityLabel={done ? `Goal complete: ${reviewed} of ${goal} today` : `Today’s goal: ${reviewed} of ${goal} photos`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View accessible accessibilityLabel={t(done ? 'swipe.goalDone' : 'swipe.goal', { done: reviewed, goal })} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Icon n={done ? 'done' : 'goal'} size={20} color={done ? th.mint : th.coral} />
             <View style={{ flex: 1 }}>
               <Bar value={reviewed / goal} color={done ? th.mint : undefined} />
@@ -208,7 +210,7 @@ export default function Swipe() {
           {perm?.accessPrivileges === 'limited' && (
             <Pressable accessibilityRole="button" onPress={addMore} hitSlop={8} style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Icon n="add" size={16} color={th.coral} />
-              <Txt v="small" style={{ fontWeight: '700' }}>Add more photos</Txt>
+              <Txt v="small" style={{ fontWeight: '700' }}>{t('swipe.addMore')}</Txt>
             </Pressable>
           )}
         </Card>
@@ -217,27 +219,27 @@ export default function Swipe() {
           {perm && !perm.granted ? (
             <Card style={{ alignItems: 'center' }}>
               {hero('library', th.coral)}
-              <Txt v="h2" style={center}>Let’s meet your camera roll</Txt>
-              <Txt muted style={center}>SwipeOut shows your photos one at a time so you can keep them or mark them for deletion. They never leave your device.</Txt>
+              <Txt v="h2" style={center}>{t('swipe.permTitle')}</Txt>
+              <Txt muted style={center}>{t('swipe.permBody')}</Txt>
               {perm.canAskAgain ? (
-                <Button title="Allow photo access" onPress={async () => { await requestPermission(); load() }} style={{ alignSelf: 'stretch' }} />
+                <Button title={t('swipe.allow')} onPress={async () => { await requestPermission(); load() }} style={{ alignSelf: 'stretch' }} />
               ) : (
-                <Button title="Open Settings" onPress={() => Linking.openSettings()} style={{ alignSelf: 'stretch' }} />
+                <Button title={t('common.openSettings')} onPress={() => Linking.openSettings()} style={{ alignSelf: 'stretch' }} />
               )}
             </Card>
           ) : !queue ? (
             <View style={{ alignItems: 'center', gap: 12 }}>
               <ActivityIndicator size="large" color={th.coral} />
-              <Txt muted>Loading your library…</Txt>
+              <Txt muted>{t('swipe.loading')}</Txt>
             </View>
           ) : ids.length ? (
             <>
-              <Deck ref={deck} ids={ids} onDecide={onDecide} onFling={onFling} onArm={() => buzz(haptics, 'select')} motion={motion} label="Photo" />
+              <Deck ref={deck} ids={ids} onDecide={onDecide} onFling={onFling} onArm={() => buzz(haptics, 'select')} motion={motion} label={t('deck.photo')} />
               {!s.reviewed && (
                 // Sits in the gap Deck leaves under the cards, so nothing moves when it goes.
                 <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 6, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
                   <Icon n="prev" size={12} color={th.muted} />
-                  <Txt v="small" muted>Swipe left to mark · right to keep</Txt>
+                  <Txt v="small" muted>{t('swipe.hint')}</Txt>
                   <Icon n="next" size={12} color={th.muted} />
                 </View>
               )}
@@ -245,19 +247,19 @@ export default function Swipe() {
           ) : (
             <View style={{ alignItems: 'center', gap: 12, padding: 16 }}>
               {failed ? hero('error', th.coral) : s.total ? <Txt v="big">🦸</Txt> : hero('library', th.lavender)}
-              <Txt v="h2" style={center}>{failed ? 'Couldn’t load your library' : s.total ? 'Camera roll hero — every photo reviewed' : 'No photos here yet'}</Txt>
-              {!failed && !s.total && <Txt muted style={center}>Snap a few and come back — we’ll be ready to swipe.</Txt>}
-              {!failed && s.marked > 0 && <Button icon="trash" title={`Review ${s.marked} marked`} onPress={() => router.push('/review')} style={{ alignSelf: 'stretch' }} />}
-              <Button title={failed ? 'Try again' : 'Check for new photos'} outline onPress={load} style={{ alignSelf: 'stretch' }} />
+              <Txt v="h2" style={center}>{failed ? t('swipe.failed') : s.total ? t('swipe.allDone') : t('swipe.empty')}</Txt>
+              {!failed && !s.total && <Txt muted style={center}>{t('swipe.emptyBody')}</Txt>}
+              {!failed && s.marked > 0 && <Button icon="trash" title={t('swipe.review', { n: s.marked })} onPress={() => router.push('/review')} style={{ alignSelf: 'stretch' }} />}
+              <Button title={failed ? t('swipe.retry') : t('swipe.checkNew')} outline onPress={load} style={{ alignSelf: 'stretch' }} />
             </View>
           )}
         </View>
 
         {queue && (
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 28, paddingBottom: 8 }}>
-            {round('trash', 'Mark for deletion', () => deck.current?.fling('delete'), th.coral, 68, !ids.length)}
-            {round('undo', 'Undo', onUndo, th.raised, 52, !canUndo)}
-            {round('keep', 'Keep', () => deck.current?.fling('keep'), th.mint, 68, !ids.length)}
+            {round('trash', t('swipe.delete'), () => deck.current?.fling('delete'), th.coral, 68, !ids.length)}
+            {round('undo', t('swipe.undo'), onUndo, th.raised, 52, !canUndo)}
+            {round('keep', t('swipe.keep'), () => deck.current?.fling('keep'), th.mint, 68, !ids.length)}
           </View>
         )}
 

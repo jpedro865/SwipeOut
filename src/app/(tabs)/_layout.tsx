@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router/js-tabs'
 import { Text } from 'react-native'
+import { t } from '../../i18n'
 import { useTheme } from '../../theme'
 
 const icon = (glyph: string) => ({ focused }: { focused: boolean }) => (
@@ -7,20 +8,20 @@ const icon = (glyph: string) => ({ focused }: { focused: boolean }) => (
 )
 
 export default function TabsLayout() {
-  const t = useTheme()
+  const th = useTheme()
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: t.coral,
-        tabBarInactiveTintColor: t.muted,
-        tabBarStyle: { backgroundColor: t.card, borderTopColor: t.line },
-        sceneStyle: { backgroundColor: t.bg },
+        tabBarActiveTintColor: th.coral,
+        tabBarInactiveTintColor: th.muted,
+        tabBarStyle: { backgroundColor: th.card, borderTopColor: th.line },
+        sceneStyle: { backgroundColor: th.bg },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Swipe', tabBarIcon: icon('🃏') }} />
-      <Tabs.Screen name="progress" options={{ title: 'Progress', tabBarIcon: icon('📈') }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: icon('🏆') }} />
+      <Tabs.Screen name="index" options={{ title: t('tab.swipe'), tabBarIcon: icon('🃏') }} />
+      <Tabs.Screen name="progress" options={{ title: t('tab.progress'), tabBarIcon: icon('📈') }} />
+      <Tabs.Screen name="profile" options={{ title: t('tab.profile'), tabBarIcon: icon('🏆') }} />
     </Tabs>
   )
 }

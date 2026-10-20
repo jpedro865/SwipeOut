@@ -1,7 +1,10 @@
+import { useLocales } from 'expo-localization'
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
+import { setLocales } from '../i18n'
+import { schedule } from '../reminder'
 import { StoreProvider, useStore } from '../store'
 import { useTheme } from '../theme'
 
@@ -12,6 +15,7 @@ function Nav() {
   const t = useTheme()
   useEffect(() => {
     SplashScreen.hideAsync()
+    if (data.settings.reminder != null) schedule(data.settings.reminder, data.goal) // its text is in the language it was scheduled in
   }, [])
   return (
     <>
@@ -31,10 +35,12 @@ function Nav() {
 }
 
 // The store renders nothing until saved progress is loaded, so the splash covers the gap.
+// Android can switch the app language without a restart: re-read it and remount with the new strings.
 export default function RootLayout() {
+  const lang = setLocales(useLocales())
   return (
     <StoreProvider>
-      <Nav />
+      <Nav key={lang} />
     </StoreProvider>
   )
 }
