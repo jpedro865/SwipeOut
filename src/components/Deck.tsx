@@ -39,7 +39,8 @@ export function Deck({ ids, onDecide, motion, ref }: { ids: string[]; onDecide: 
   const pan = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => !busy.current && Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
     onPanResponderMove: (_, g) => busy.current || pos.setValue({ x: g.dx, y: g.dy }),
-    onPanResponderRelease: (_, g) => live.current(g),
+    // g.dx stops at the last move JS saw; measure to where the finger lifted.
+    onPanResponderRelease: (e, g) => live.current({ dx: e.nativeEvent.pageX - g.x0, vx: g.vx }),
     onPanResponderTerminate: () => live.current({ dx: 0, vx: 0 }),
   }), [pos])
 
