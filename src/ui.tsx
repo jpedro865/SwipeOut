@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics'
 import { SymbolView, type AndroidSymbol, type SFSymbol, type SymbolWeight } from 'expo-symbols'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Platform, Pressable, Text, View, useWindowDimensions, type StyleProp, type TextProps, type ViewStyle } from 'react-native'
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context'
 import { fmtNum } from './i18n'
@@ -179,6 +179,17 @@ export function Row({ icon, tile, label, value, children, onPress }: { icon: Ico
 }
 
 export const center = { textAlign: 'center' } as const
+
+// Visited tabs stay mounted. A hidden one catches up once swiping pauses: no work per swipe, yet it's
+// current when the native tab bar switches to it (that happens before JS hears about the focus change).
+export function useSettled<T>(value: T, live: boolean, ms = 600) {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), live ? 0 : ms)
+    return () => clearTimeout(id)
+  }, [value, live, ms])
+  return live ? value : settled
+}
 
 // Each kind matches a sound: keep = crisp, delete = damped (never Heavy or Reject, which read as an error), select = undo/toggles.
 // Android's Vibrator makes every impact feel the same, so use its haptic engine there (Confirm needs API 30).

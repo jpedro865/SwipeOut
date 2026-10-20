@@ -1,21 +1,18 @@
 import { useIsFocused } from 'expo-router'
-import { memo, useRef, useState } from 'react'
+import { memo, useState } from 'react'
 import { Pressable, ScrollView, View, type ViewStyle } from 'react-native'
 import { ACHIEVEMENTS, FREEZE_EVERY, MAX_FREEZES, dayKey, daysToFinish, longestStreak, met, parseDay, stats, streak, type Data } from '../../logic'
 import { achDesc, achTitle, cap, fmtBytes, fmtDate, fmtDay, fmtPct, firstWeekday, milestone, t, weekdays } from '../../i18n'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
-import { Bar, Card, Icon, Screen, Stat, Txt, type IconName } from '../../ui'
+import { Bar, Card, Icon, Screen, Stat, Txt, useSettled, type IconName } from '../../ui'
 
 const LADDER = ['r100', 'r500', 'r1000', 'half', 'hero']
 const row = { flexDirection: 'row', gap: 12 } as const
 
-// Visited tabs stay mounted: render from the last focused snapshot so a hidden tab does no work per swipe.
 export default function Progress() {
   const { data } = useStore()
-  const shown = useRef(data)
-  if (useIsFocused()) shown.current = data
-  return <Body data={shown.current} />
+  return <Body data={useSettled(data, useIsFocused())} />
 }
 
 const Body = memo(function Body({ data }: { data: Data }) {
@@ -56,7 +53,7 @@ const Body = memo(function Body({ data }: { data: Data }) {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 16, gap: 16 }}>
         <Txt v="title" accessibilityRole="header">{t('progress.title')}</Txt>
 
         <Card>

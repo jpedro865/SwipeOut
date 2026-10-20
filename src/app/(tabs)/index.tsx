@@ -202,7 +202,8 @@ export default function Swipe() {
   )
 
   return (
-    <Screen>
+    // iOS 26+ floats the tab bar over content; its height is part of the bottom safe area. Android lays tabs out below.
+    <Screen edges={Platform.OS === 'ios' ? ['top', 'bottom'] : ['top']}>
       <View style={{ flex: 1, padding: 16, paddingBottom: 4, gap: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Txt v="title" accessibilityRole="header" style={{ flex: 1 }}>

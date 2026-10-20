@@ -1,7 +1,7 @@
 import Constants from 'expo-constants'
 import * as Notifications from 'expo-notifications'
 import { useIsFocused } from 'expo-router'
-import { memo, useRef } from 'react'
+import { memo } from 'react'
 import { Alert, Linking, Platform, Pressable, ScrollView, Switch, View } from 'react-native'
 import { getLocales } from 'expo-localization'
 import { achDesc, achTitle, fmtDay, fmtNum, fmtTime, t } from '../../i18n'
@@ -10,17 +10,14 @@ import { channel, schedule } from '../../reminder'
 import { play } from '../../sound'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
-import { Bar, Card, Icon, Row, Screen, Txt, type IconName } from '../../ui'
+import { Bar, Card, Icon, Row, Screen, Txt, useSettled, type IconName } from '../../ui'
 
 // iOS shows a per-app language only once the user has 2+ preferred languages; Android since 13.
 const canSwitchLang = Platform.OS === 'ios' ? getLocales().length > 1 : Number(Platform.Version) >= 33
 
-// Visited tabs stay mounted: render from the last focused snapshot so a hidden tab does no work per swipe.
 export default function Profile() {
   const { data, update } = useStore()
-  const shown = useRef(data)
-  if (useIsFocused()) shown.current = data
-  return <Body data={shown.current} update={update} />
+  return <Body data={useSettled(data, useIsFocused())} update={update} />
 }
 
 const Body = memo(function Body({ data, update }: { data: Data; update: ReturnType<typeof useStore>['update'] }) {
@@ -88,7 +85,7 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20, gap: 16 }}>
         <Txt v="title" accessibilityRole="header">{t('profile.title')}</Txt>
 
         <Card>
