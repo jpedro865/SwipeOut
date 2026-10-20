@@ -1,8 +1,9 @@
 name: CI
 
 # PRs, and master runs with nothing to release: typecheck, tests and unsigned native builds.
-# master with releasable commits (feat/fix/perf): semantic-release picks the version, both apps are
-# built, signed and pushed to private GitHub Packages, then the commit is tagged with release notes.
+# master with releasable commits (feat/fix/perf): semantic-release picks the version; each platform
+# whose secrets are set is built, signed and pushed to a private GitHub Package (the others get a
+# verify build), then the commit is tagged with release notes.
 # Binaries never touch workflow artifacts or GitHub Releases: both are public on a public repo.
 on:
   pull_request:
@@ -91,8 +92,10 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     outputs:
-      release: ${{ steps.gate.outputs.release }}
+      release: ${{ steps.gate.outputs.release }} # the version, when at least one platform ships
       build: ${{ steps.gate.outputs.build }}
+      android: ${{ steps.gate.outputs.android }}
+      ios: ${{ steps.gate.outputs.ios }}
     steps:
       - id: gate
         env:
@@ -106,25 +109,34 @@ jobs:
           IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
-          missing=""
-          for s in ANDROID_UPLOAD_KEYSTORE_BASE64 ANDROID_UPLOAD_STORE_PASSWORD ANDROID_UPLOAD_KEY_ALIAS \
-                   ANDROID_UPLOAD_KEY_PASSWORD IOS_DIST_P12_BASE64 IOS_DIST_P12_PASSWORD IOS_PROFILE_BASE64 GHCR_TOKEN; do
-            [ -n "${!s}" ] || missing="$missing $s"
+          # Each platform ships once its own secrets and GHCR_TOKEN exist; the rest get a verify build.
+          missing() { for s in "$@"; do [ -n "${!s}" ] || printf ' %s' "$s"; done; }
+          shipped=""
+          for platform in android ios; do
+            if [ "$platform" = android ]; then
+              gaps=$(missing GHCR_TOKEN ANDROID_UPLOAD_KEYSTORE_BASE64 ANDROID_UPLOAD_STORE_PASSWORD ANDROID_UPLOAD_KEY_ALIAS ANDROID_UPLOAD_KEY_PASSWORD)
+            else
+              gaps=$(missing GHCR_TOKEN IOS_DIST_P12_BASE64 IOS_DIST_P12_PASSWORD IOS_PROFILE_BASE64)
+            fi
+            if [ -n "$gaps" ]; then
+              echo "::warning title=$platform v$VERSION not released::Missing secrets:$gaps (see docs/RELEASING.md). It got a verify build instead."
+              echo "$platform=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "$platform=true" >> "$GITHUB_OUTPUT"
+              shipped="$shipped $platform"
+            fi
           done
-          if [ -n "$missing" ]; then
-            echo "::warning title=v$VERSION not released::Missing signing secrets:$missing (see docs/RELEASING.md). Builds ran unsigned."
-            exit 0
-          fi
+          [ -n "$shipped" ] || exit 0
           # Store build numbers must only grow: derive them from semver (1.2.3 -> 1002003).
           IFS=. read -r major minor patch <<< "$VERSION"
           echo "release=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_OUTPUT"
 
-  # Verify builds: PRs, and master runs that don't release. No secrets.
+  # Verify builds: PRs, and master runs where that platform doesn't ship. No secrets.
   android:
     name: Android (verify)
     needs: [checks, version, gate]
-    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.version.result != 'failure' && needs.gate.result != 'failure' && needs.gate.outputs.release == '' }}
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.version.result != 'failure' && needs.gate.result != 'failure' && needs.gate.outputs.android != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -157,7 +169,7 @@ jobs:
   ios:
     name: iOS (verify)
     needs: [checks, version, gate]
-    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.version.result != 'failure' && needs.gate.result != 'failure' && needs.gate.outputs.release == '' }}
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.version.result != 'failure' && needs.gate.result != 'failure' && needs.gate.outputs.ios != 'true' }}
     runs-on: macos-26
     timeout-minutes: 75
     permissions:
@@ -188,11 +200,11 @@ jobs:
   # Release builds: secrets come from the `production` environment (master only).
   # Each job pushes its binaries to a pre-created private package with GHCR_TOKEN; this public repo's
   # GITHUB_TOKEN gets no package access, since fork PRs could request packages: read with it.
-  # Tagging happens once both pushes succeed.
+  # Tagging happens once every platform that was due has pushed.
   android-release:
     name: Android (signed)
     needs: gate
-    if: needs.gate.outputs.release != ''
+    if: needs.gate.outputs.android == 'true'
     environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 75
@@ -316,7 +328,7 @@ jobs:
   ios-release:
     name: iOS (signed)
     needs: gate
-    if: needs.gate.outputs.release != ''
+    if: needs.gate.outputs.ios == 'true'
     environment: production
     runs-on: macos-26
     timeout-minutes: 90
@@ -433,7 +445,8 @@ jobs:
   release:
     name: Tag & release notes
     needs: [gate, android-release, ios-release]
-    if: needs.gate.outputs.release != ''
+    # Skipped platforms are fine (no secrets yet); a failed one blocks the tag.
+    if: ${{ !cancelled() && needs.gate.outputs.release != '' && contains(fromJSON('["success","skipped"]'), needs.android-release.result) && contains(fromJSON('["success","skipped"]'), needs.ios-release.result) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -455,13 +468,15 @@ jobs:
       - name: Summary
         env:
           VERSION: ${{ needs.gate.outputs.release }}
+          ANDROID: ${{ needs.gate.outputs.android }}
+          IOS: ${{ needs.gate.outputs.ios }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}"
           if git tag --points-at HEAD | grep -qx "v$VERSION"; then
             {
               echo "### SwipeOut v$VERSION"
-              echo "- \`oras pull $image/android:$VERSION\`: AAB for Google Play, APK, R8 mapping"
-              echo "- \`oras pull $image/ios:$VERSION\`: IPA for App Store Connect, dSYMs"
+              [ "$ANDROID" != true ] || echo "- \`oras pull $image/android:$VERSION\`: AAB for Google Play, APK, R8 mapping"
+              [ "$IOS" != true ] || echo "- \`oras pull $image/ios:$VERSION\`: IPA for App Store Connect, dSYMs"
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "::warning::v$VERSION was built but not tagged because master moved on; the next master run releases it."
