@@ -110,7 +110,7 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
                   key={a.id}
                   accessible
                   accessibilityLabel={`${a.title}, ${day ? `unlocked ${fmtDay(day)}` : `locked. ${a.desc}`}`}
-                  style={{ width: '31%', alignItems: 'center', gap: 4, padding: 8, borderRadius: 16, borderWidth: 1, borderColor: t.line, backgroundColor: day ? t.raised : 'transparent' }}
+                  style={{ width: '31%', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 4, borderRadius: 16, borderWidth: 1, borderColor: t.line, backgroundColor: day ? t.raised : 'transparent' }}
                 >
                   <Txt v="title" style={{ opacity: day ? 1 : 0.3 }}>{a.icon}</Txt>
                   <Txt v="small" style={{ fontWeight: '700', textAlign: 'center' }}>{a.title}</Txt>
