@@ -65,7 +65,10 @@ export default function Onboarding() {
               style={{ flexDirection: 'row', alignItems: 'center', gap: 16, padding: 18, borderRadius: 24, backgroundColor: t.card, borderWidth: 2, borderColor: on ? t.coral : t.line }}
             >
               <View style={{ flex: 1 }}>
-                <Txt v="title">{n} <Txt v="body" muted>photos a day</Txt></Txt>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                  <Txt v="title">{n}</Txt>
+                  <Txt muted>photos a day</Txt>
+                </View>
                 <Txt v="small" muted>{BLURBS[n]}</Txt>
               </View>
               <View style={{ width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? t.coral : 'transparent', borderWidth: on ? 0 : 2, borderColor: t.line }}>
