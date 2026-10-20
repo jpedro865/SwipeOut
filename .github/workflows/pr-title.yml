@@ -1,0 +1,28 @@
+name: PR title
+
+# A squash merge uses the PR title as the commit subject, which decides the release.
+# Separate from ci.yml so a title edit re-checks in seconds without restarting the native builds.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: Conventional PR title
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if printf '%s\n' "$TITLE" | grep -qE '^((feat|fix|perf|refactor|revert|build|ci|chore|docs|style|test)(\([a-z0-9-]+\))?!?: .+|Revert ".+")$'; then
+            exit 0
+          fi
+          echo "::error::The PR title must follow Conventional Commits, e.g. 'fix(swipe): ...'"
+          exit 1
