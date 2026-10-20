@@ -13,6 +13,7 @@ export function Deck({ ids, onDecide, motion, ref }: { ids: string[]; onDecide: 
   const pos = useAnimatedValueXY({ x: 0, y: 0 })
   const busy = useRef(false)
   const top = ids[0]
+  const q = width / 4 // stamp and glow are full here, and a release past it commits
 
   // Stopped by the reset below if the top card changes mid-fling (undo), so it never decides twice.
   const fling = (choice: Choice) => {
@@ -23,7 +24,7 @@ export function Deck({ ids, onDecide, motion, ref }: { ids: string[]; onDecide: 
   }
   const release = ({ dx, vx }: { dx: number; vx: number }) => {
     if (busy.current) return
-    if (Math.abs(dx) > 0.28 * width || Math.abs(vx) > 0.8) fling((Math.abs(vx) > 0.8 ? vx : dx) > 0 ? 'keep' : 'delete')
+    if (Math.abs(dx) >= q || Math.abs(vx) > 0.8) fling((Math.abs(vx) > 0.8 ? vx : dx) > 0 ? 'keep' : 'delete')
     else Animated.spring(pos, { toValue: { x: 0, y: 0 }, bounciness: motion ? 8 : 0, useNativeDriver: false }).start()
   }
   const live = useRef(release)
@@ -42,7 +43,6 @@ export function Deck({ ids, onDecide, motion, ref }: { ids: string[]; onDecide: 
     onPanResponderTerminate: () => live.current({ dx: 0, vx: 0 }),
   }), [pos])
 
-  const q = width / 4
   const keep = pos.x.interpolate({ inputRange: [0, q], outputRange: [0, 1], extrapolate: 'clamp' })
   const del = pos.x.interpolate({ inputRange: [-q, 0], outputRange: [1, 0], extrapolate: 'clamp' })
   const glow = pos.x.interpolate({ inputRange: [-q, 0, q], outputRange: [t.coral, t.card, t.mint], extrapolate: 'clamp' })
