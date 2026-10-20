@@ -3,8 +3,9 @@ import { router, useIsFocused } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, ActivityIndicator, Animated, AppState, Linking, Platform, Pressable, Text, View, useAnimatedValue } from 'react-native'
 import { Deck, type Choice, type DeckRef } from '../../components/Deck'
-import { achTitle, fmtNum, t } from '../../i18n'
-import { ACHIEVEMENTS, CHEERS, arrange, dayKey, decide, met, setLibrary, stats, streak, undo, type Photo } from '../../logic'
+import { YearChip, Years, yearName } from '../../components/Years'
+import { achTitle, fmtNum, t, when } from '../../i18n'
+import { ACHIEVEMENTS, CHEERS, arrange, dayKey, decide, met, setLibrary, stats, streak, undo, yearsLeft, type Photo } from '../../logic'
 import { allPhotos, getPermission, pickMorePhotos, requestPermission } from '../../media'
 import { play } from '../../sound'
 import { useStore } from '../../store'
@@ -23,12 +24,14 @@ export default function Swipe() {
   const [photos, setPhotos] = useState<Photo[] | null>(null) // the whole library, from the last sweep
   const [toast, setToast] = useState<Toast | null>(null)
   const [failed, setFailed] = useState(false)
+  const [picking, setPicking] = useState(false) // the year row is open
   const decidedOn = useRef<Record<string, string>>({}) // id -> day it was counted on, so undo after midnight fixes the right day
   const latest = useRef(data)
   latest.current = data
-  const { haptics, sounds, motion, shuffle } = data.settings
+  const { haptics, sounds, motion, shuffle, year } = data.settings
+  const setYear = (y: number | null) => update(s => ({ ...s, settings: { ...s.settings, year: y } }))
 
-  const load = async () => {
+  const load = async (initial = false) => {
     setFailed(false)
     try {
       const p = await getPermission()
@@ -37,6 +40,10 @@ export default function Swipe() {
       if (!p.granted) return
       const all = await allPhotos()
       update(s => setLibrary(s, all.map(p => p.id), dayKey()))
+      // Never open the app on an empty deck: a saved year that's already finished falls back to all years.
+      // Later reloads keep the year-done screen.
+      const { settings: { year: y }, decisions } = latest.current
+      if (initial && y != null && !all.some(p => p.year === y && !decisions[p.id])) setYear(null)
       setPhotos(all)
     } catch {
       setFailed(true)
@@ -44,12 +51,12 @@ export default function Swipe() {
     }
   }
   useEffect(() => {
-    load()
+    load(true)
   }, [])
 
-  // A fresh shuffle on every load, and whenever the order changes. A new queue starts at its first
-  // card in the same render (no flash of the old one); undo history starts over with it.
-  const queue = useMemo(() => photos && arrange(photos, latest.current.decisions, shuffle), [photos, shuffle])
+  // A fresh shuffle on every load, and whenever the order or year changes. A new queue starts at its
+  // first card in the same render (no flash of the old one); undo history starts over with it.
+  const queue = useMemo(() => photos && arrange(photos, latest.current.decisions, shuffle, year), [photos, shuffle, year])
   const [at, setAt] = useState({ queue, idx: 0 })
   const idx = at.queue === queue ? at.idx : 0
   const setIdx = (i: number) => setAt({ queue, idx: i })
@@ -57,11 +64,12 @@ export default function Swipe() {
   const cards = queue?.slice(idx, idx + 3) ?? []
   const ids = cards.map(p => p.id)
   const stale = (!!queue && !ids.length) || (!!perm && !perm.granted && !perm.canAskAgain) // the system dialog also toggles AppState
+  // Not while Review is open on top: its own delete dialog toggles AppState, and two library sweeps would race.
   useEffect(() => {
-    if (!stale) return
+    if (!stale || !focused) return
     const sub = AppState.addEventListener('change', st => st === 'active' && load())
     return () => sub.remove()
-  }, [stale])
+  }, [stale, focused])
 
   useEffect(() => {
     if (!toast) return
@@ -100,7 +108,9 @@ export default function Swipe() {
   const onFling = (choice: Choice) => {
     play(choice, sounds)
     buzz(haptics, choice === 'keep' ? 'tap' : 'soft')
-    AccessibilityInfo.announceForAccessibility(t(choice === 'keep' ? 'swipe.didKeep' : 'swipe.didDelete')) // focus stays on the deck, so say it
+    // Focus stays on the deck, so say what happened and what comes next.
+    const next = cards[1]
+    AccessibilityInfo.announceForAccessibility([t(choice === 'keep' ? 'swipe.didKeep' : 'swipe.didDelete'), next && when(next.time)?.text, next?.fav && t('deck.favorite')].filter(Boolean).join(', '))
   }
 
   const onDecide = (choice: Choice) => {
@@ -111,10 +121,17 @@ export default function Swipe() {
     decidedOn.current[ids[0]] = k
     update(s => decide(s, ids[0], choice, k))
     setIdx(idx + 1)
-    if (willComplete) {
-      // The goal screen lists this swipe's unlocks and plays its own sound: one celebration at a time.
+    const yearDone = year != null && idx + 1 === queue?.length
+    if (willComplete || yearDone) {
+      // One celebration at a time: the goal screen lists this swipe's unlocks and plays its own sound,
+      // and a finished year plays the achievement sound once even if a badge unlocked with it.
       seen.current = Object.keys(decide(data, ids[0], choice, k).unlocked).length
-      router.push('/complete')
+      if (willComplete) router.push('/complete')
+      else {
+        play('achievement', sounds)
+        buzz(haptics, 'success')
+        AccessibilityInfo.announceForAccessibility(t('year.sorted', { y: yearName(year) }))
+      }
     } else if (CHEERS.includes(n)) setToast({ icon: 'sparkles', text: t('swipe.cheer', { n }), say: t('swipe.cheerSay', { n }) })
   }
 
@@ -133,6 +150,18 @@ export default function Swipe() {
     setIdx(idx - 1)
     play('undo', sounds)
     buzz(haptics, 'select')
+  }
+
+  const top = cards[0]
+  const topWhen = top && when(top.time)
+  const label = [t('deck.photo'), topWhen?.text, top?.fav && t('deck.favorite')].filter(Boolean).join(', ')
+  const years = picking || (queue && !ids.length && year != null) ? yearsLeft(photos ?? [], data.decisions) : []
+  const nextYear = year == null ? undefined : (years.find(([y, n]) => n > 0 && y && y < year) ?? years.find(([, n]) => n > 0))?.[0]
+  const pick = (y: number | null) => {
+    setPicking(false)
+    buzz(haptics, 'select')
+    if (y !== year) setYear(y)
+    AccessibilityInfo.announceForAccessibility(y == null ? t('year.allA11y') : yearName(y))
   }
 
   const k = dayKey()
@@ -206,13 +235,17 @@ export default function Swipe() {
         </View>
 
         <Card style={{ padding: 12, paddingHorizontal: 14, gap: 8, borderRadius: 20 }}>
-          <View accessible accessibilityLabel={t(done ? 'swipe.goalDone' : 'swipe.goal', { done: reviewed, goal })} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Icon n={done ? 'done' : 'goal'} size={20} color={done ? th.mint : th.coral} />
-            <View style={{ flex: 1 }}>
-              <Bar value={reviewed / goal} color={done ? th.mint : undefined} />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+            <View accessible accessibilityLabel={t(done ? 'swipe.goalDone' : 'swipe.goal', { done: reviewed, goal })} style={{ flex: 1, minWidth: 150, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Icon n={done ? 'done' : 'goal'} size={20} color={done ? th.mint : th.coral} />
+              <View style={{ flex: 1 }}>
+                <Bar value={reviewed / goal} color={done ? th.mint : undefined} />
+              </View>
+              <Txt v="h2">{reviewed}<Txt muted>/{goal}</Txt></Txt>
             </View>
-            <Txt v="h2">{reviewed}<Txt muted>/{goal}</Txt></Txt>
+            {photos && <YearChip year={year} open={picking} onPress={() => { setPicking(!picking); buzz(haptics, 'select') }} />}
           </View>
+          {picking && <Years years={years} year={year} onPick={pick} />}
           {perm?.accessPrivileges === 'limited' && (
             <Pressable accessibilityRole="button" onPress={addMore} hitSlop={8} style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Icon n="add" size={16} color={th.coral} />
@@ -240,7 +273,7 @@ export default function Swipe() {
             </View>
           ) : ids.length ? (
             <>
-              <Deck ref={deck} ids={ids} onDecide={onDecide} onFling={onFling} onArm={() => buzz(haptics, 'select')} motion={motion} label={t('deck.photo')} />
+              <Deck ref={deck} cards={cards} onDecide={onDecide} onFling={onFling} onArm={() => buzz(haptics, 'select')} motion={motion} label={label} />
               {!s.reviewed && (
                 // Sits in the gap Deck leaves under the cards, so nothing moves when it goes.
                 <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 6, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
@@ -250,6 +283,17 @@ export default function Swipe() {
                 </View>
               )}
             </>
+          ) : year != null && !failed ? (
+            <View style={{ alignItems: 'center', gap: 12, padding: 16 }}>
+              {hero('done', th.mint)}
+              <View accessible style={{ alignItems: 'center' }}>
+                <Txt v="big">{yearName(year)}</Txt>
+                <Txt v="h2" muted>{t('year.done')}</Txt>
+              </View>
+              {nextYear != null && <Button icon="calendar" title={t('year.next', { y: yearName(nextYear) })} onPress={() => pick(nextYear)} style={{ alignSelf: 'stretch' }} />}
+              <Button icon="all" title={t('year.allA11y')} outline onPress={() => pick(null)} style={{ alignSelf: 'stretch' }} />
+              {s.marked > 0 && <Button icon="trash" title={t('swipe.review', { n: s.marked })} outline onPress={() => router.push('/review')} style={{ alignSelf: 'stretch' }} />}
+            </View>
           ) : (
             <View style={{ alignItems: 'center', gap: 12, padding: 16 }}>
               {failed ? hero('error', th.coral) : s.total ? <Txt v="big">🦸</Txt> : hero('library', th.lavender)}

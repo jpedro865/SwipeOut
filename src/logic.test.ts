@@ -1,5 +1,5 @@
 // Run: npm test  (plain node + asserts, no framework)
-import { addDays, applyFreezes, arrange, decide, initialData, longestStreak, markDeleted, setGoal, setLibrary, stats, streak, undo, xp, type Data, type Photo } from './logic.ts'
+import { addDays, applyFreezes, arrange, decide, initialData, longestStreak, markDeleted, seasonOf, setGoal, setLibrary, stats, streak, undo, xp, yearOf, yearsLeft, type Data, type Photo } from './logic.ts'
 
 const eq = (a: unknown, b: unknown) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${JSON.stringify(a)} !== ${JSON.stringify(b)}`)
@@ -92,23 +92,30 @@ eq(xp({ ...initialData }).level, 1)
 eq(xp(goal({ ...initialData, goal: 200 }, T, 99)).level, 1) // 99 XP
 eq(xp(goal({ ...initialData, goal: 200 }, T, 100)).points, 200) // 100 reviewed + Photo Rookie
 eq(xp(goal({ ...initialData, goal: 25 }, T, 25)).level, 1) // 25 + 25 goal day = 50
-// deck order: decided photos drop out, shuffling keeps bursts together
+// deck order: decided photos drop out, a year filters, shuffling keeps bursts together
 const at = (y: number, mo: number, d: number, sec = 0) => new Date(y, mo, d, 12, 0, sec).getTime()
-const ph = (id: string, time: number): Photo => ({ id, time })
+const ph = (id: string, time: number): Photo => ({ id, time, fav: false, year: yearOf(time) })
 const lib: Photo[] = [ph('b1', at(2024, 6, 14, 0)), ph('b2', at(2024, 6, 14, 5)), ph('b3', at(2024, 6, 14, 9)), ph('old', at(2019, 0, 2)), ph('new', at(2025, 11, 24)), ph('undated', 0), ph('done', at(2019, 5, 1))]
 const dec: Data['decisions'] = { done: 'keep' }
 const ids = (ps: Photo[]) => ps.map(p => p.id)
-eq(ids(arrange(lib, dec, false)), ['new', 'b3', 'b2', 'b1', 'old', 'undated'])
+eq(ids(arrange(lib, dec, false, null)), ['new', 'b3', 'b2', 'b1', 'old', 'undated'])
+eq(ids(arrange(lib, dec, false, 2024)), ['b3', 'b2', 'b1'])
+eq(ids(arrange(lib, dec, true, 2019)), ['old'])
 for (let k = 0; k < 20; k++) {
-  const r = ids(arrange(lib, dec, true))
+  const r = ids(arrange(lib, dec, true, null))
   eq([...r].sort(), ['b1', 'b2', 'b3', 'new', 'old', 'undated']) // a permutation of what's left
   const i = r.indexOf('b3')
   eq(r.slice(i, i + 3), ['b3', 'b2', 'b1'])
 }
+eq(yearsLeft(lib, dec), [[2025, 1], [2024, 3], [2019, 1], [0, 1]])
 // a long session shot every 40s doesn't chain into one unshuffled block; neither does a bulk import with one timestamp
 const chain = Array.from({ length: 30 }, (_, i) => ph(`c${i}`, at(2019, 4, 1) + i * 40_000))
-ok(ids(arrange(chain, {}, true)).join() !== ids(arrange(chain, {}, false)).join())
+ok(ids(arrange(chain, {}, true, null)).join() !== ids(arrange(chain, {}, false, null)).join())
 const pile = Array.from({ length: 120 }, (_, i) => ph(`p${i}`, at(2020, 1, 1)))
-ok(ids(arrange(pile, {}, true)).join() !== ids(pile).join())
+ok(ids(arrange(pile, {}, true, null)).join() !== ids(pile).join())
+eq(yearOf(new Date(1965, 5, 1).getTime()), 1965) // scanned pre-1970 photos keep their year
+eq([seasonOf(new Date(2024, 11, 24)), seasonOf(new Date(2025, 1, 28)), seasonOf(new Date(2024, 6, 14)), seasonOf(new Date(2024, 9, 1))], ['winter', 'winter', 'summer', 'autumn'])
+eq(seasonOf(new Date(2024, 6, 14), true), 'winter')
+eq(seasonOf(new Date(2024, 3, 1), true), 'autumn')
 
 console.log('logic ok')

@@ -1,7 +1,7 @@
 import { File } from 'expo-file-system'
 import { Asset, AssetField, MediaType, Query, getPermissionsAsync, presentPermissionsPicker, requestPermissionsAsync, type PermissionResponse } from 'expo-media-library'
 import { Platform } from 'react-native'
-import type { Photo } from './logic'
+import { yearOf, type Photo } from './logic'
 
 // Photos only; the same list must go to the plugin config and the runtime request on Android.
 // Cast so accessPrivileges ('limited' on iOS / Android 14+) is visible; it is set at runtime.
@@ -22,7 +22,10 @@ export async function allPhotos() {
       .limit(PAGE)
       .offset(offset)
       .exeForMetadata()
-    for (const a of page) photos.set(a.id, { id: a.id, time: a.creationTime ?? a.modificationTime ?? 0 })
+    for (const a of page) {
+      const time = a.creationTime ?? a.modificationTime ?? 0
+      photos.set(a.id, { id: a.id, time, fav: a.isFavorite, year: yearOf(time) })
+    }
     if (page.length < PAGE) return [...photos.values()]
   }
 }

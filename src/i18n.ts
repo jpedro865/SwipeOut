@@ -1,6 +1,6 @@
 import { getCalendars, getLocales, type Locale } from 'expo-localization'
 import { fr } from './fr'
-import { nextBadge, parseDay } from './logic'
+import { nextBadge, parseDay, seasonOf, type Season } from './logic'
 
 // English is the source of the keys. A [one, other] pair is picked by the {n} variable.
 // Hermes has no Intl.PluralRules, hence the hand-written rule in t().
@@ -37,7 +37,18 @@ const en = {
   'swipe.didKeep': 'Kept',
   'swipe.didDelete': 'Marked for deletion',
   'deck.photo': 'Photo',
+  'deck.favorite': 'favorite',
   'deck.hint': 'Swipe right to keep, left to mark for deletion',
+
+  // years
+  'year.all': 'All',
+  'year.allA11y': 'All years',
+  'year.choose': 'Choose a year',
+  'year.undated': 'Undated',
+  'year.left': ['{y}, {n} photo left', '{y}, {n} photos left'],
+  'year.sorted': '{y}, all sorted',
+  'year.done': 'All sorted!',
+  'year.next': 'Continue with {y}',
 
   // review
   'review.title': 'Review',
@@ -186,6 +197,10 @@ const en = {
   'ach.streak.d': '{n}-day streak',
 
   // dates
+  'season.spring': 'Spring {y}',
+  'season.summer': 'Summer {y}',
+  'season.autumn': 'Autumn {y}',
+  'season.winter': 'Winter {y}',
   'unit.kb': 'KB',
   'unit.mb': 'MB',
   'unit.gb': 'GB',
@@ -202,9 +217,12 @@ const dicts = {
   fr: Object.fromEntries(Object.entries(fr).map(([k, v]) => [k, typeof v === 'string' ? typeset(v) : v.map(typeset)])) as Dict,
 }
 
+const SOUTH = new Set(['AR', 'AU', 'BO', 'BR', 'BW', 'CL', 'LS', 'MG', 'MU', 'MZ', 'NA', 'NC', 'NZ', 'PE', 'PF', 'PY', 'RE', 'SZ', 'UY', 'YT', 'ZA', 'ZM', 'ZW'])
+
 export let lang: keyof typeof dicts = 'en'
 export let locale = 'en' // BCP 47 tag for dates and numbers
 export let firstWeekday = 1 // 1 = Sunday
+let south = false
 
 // The first preferred language we speak wins ([de, fr] gets French). Re-run from the root layout's
 // useLocales(): Android can switch the app language without restarting the app.
@@ -213,6 +231,7 @@ export function setLocales(all: Locale[]) {
   lang = l.languageCode === 'fr' ? 'fr' : 'en'
   const region = all[0].regionCode // the user's region, whatever language they read
   locale = l.languageCode === lang ? l.languageTag : region ? `en-${region}` : 'en' // English words, local formats (en-DE: 20:00, 5 Oct)
+  south = SOUTH.has(region ?? '')
   firstWeekday = getCalendars()[0]?.firstWeekday ?? 1
   return lang
 }
@@ -247,6 +266,18 @@ export function fmtBytes(n: number) {
 
 // Weekday initials in the locale's order, starting on its first day of the week.
 export const weekdays = () => Array.from({ length: 7 }, (_, i) => fmtDate(new Date(2023, 0, firstWeekday + i), { weekday: 'narrow' })) // 1 Jan 2023 was a Sunday
+
+const DAY = 864e5
+// Quick "when" for a photo: "12 Oct" for the last two months, "Summer 2024" before that; null when undated.
+export function when(time: number, now = Date.now()): { season: Season | null; text: string } | null {
+  if (!time) return null
+  const d = new Date(time)
+  // A wrong camera clock in the future still gets its year.
+  if (time <= now && now - time < 60 * DAY) return { season: null, text: fmtDate(d, { day: 'numeric', month: 'short' }) }
+  const season = seasonOf(d, south)
+  return { season, text: t(`season.${season}`, { y: String(d.getFullYear()) }) }
+}
+export const fullDate = (time: number) => cap(fmtDate(new Date(time), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))
 
 export const achTitle = (id: string) => t(`ach.${id}` as Key)
 export const achDesc = (id: string) => (id.startsWith('streak') ? t('ach.streak.d', { n: Number(id.slice(6)) }) : t(`ach.${id}.d` as Key))

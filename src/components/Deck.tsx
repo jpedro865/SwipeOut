@@ -2,17 +2,19 @@ import { Image } from 'expo-image'
 import { useImperativeHandle, useLayoutEffect, useMemo, useRef, type Ref } from 'react'
 import { Animated, PanResponder, StyleSheet, useAnimatedValueXY, useWindowDimensions, View, type ViewStyle } from 'react-native'
 import { t } from '../i18n'
+import type { Photo } from '../logic'
 import { useTheme } from '../theme'
 import { Icon } from '../ui'
+import { DatePill } from './DatePill'
 
 export type Choice = 'keep' | 'delete'
 export type DeckRef = { fling: (choice: Choice) => void }
 
-// ids = current card + up to 2 behind it, so the next images are already loaded.
+// cards = current card + up to 2 behind it, so the next images are already loaded.
 // onFling fires the moment a swipe commits (sound, haptic); onDecide once the card has left.
 // onArm fires when a drag crosses the commit line, either way.
-export function Deck({ ids, onDecide, onFling, onArm, motion, label, ref }: {
-  ids: string[]
+export function Deck({ cards, onDecide, onFling, onArm, motion, label, ref }: {
+  cards: Photo[]
   onDecide: (choice: Choice) => void
   onFling: (choice: Choice) => void
   onArm: () => void
@@ -25,7 +27,7 @@ export function Deck({ ids, onDecide, onFling, onArm, motion, label, ref }: {
   const pos = useAnimatedValueXY({ x: 0, y: 0 })
   const busy = useRef(false)
   const armed = useRef(0)
-  const top = ids[0]
+  const top = cards[0]?.id
   const q = width / 4 // stamp and glow are full here, and a release past it commits
 
   // Stopped by the reset below if the top card changes mid-fling (undo), so it never decides twice.
@@ -97,7 +99,8 @@ export function Deck({ ids, onDecide, onFling, onArm, motion, label, ref }: {
       accessibilityActions={[{ name: 'keep', label: t('swipe.keep') }, { name: 'delete', label: t('swipe.delete') }]}
       onAccessibilityAction={e => fling(e.nativeEvent.actionName as Choice)}
     >
-      {ids.map((id, i) => {
+      {cards.map((photo, i) => {
+        const id = photo.id
         const step = Animated.subtract(i, near)
         return (
           <Animated.View
@@ -113,6 +116,7 @@ export function Deck({ ids, onDecide, onFling, onArm, motion, label, ref }: {
           >
             <Image source={{ uri: id }} contentFit="cover" blurRadius={40} style={StyleSheet.absoluteFill} />
             <Image source={{ uri: id }} contentFit="contain" recyclingKey={id} transition={120} style={StyleSheet.absoluteFill} />
+            <DatePill photo={photo} />
             {!i && stamp('keep', keep, { left: 20 })}
             {!i && stamp('delete', del, { right: 20 })}
           </Animated.View>

@@ -3,9 +3,9 @@
 type Decision = 'keep' | 'delete' | 'deleted'
 // done: today's rewards were granted; earned: that grant included a streak freeze
 export type Day = { reviewed: number; goal: number; done?: boolean; earned?: boolean; frozen?: boolean }
-// reminder = minutes after midnight; shuffle off = newest first
-export type Settings = { haptics: boolean; motion: boolean; sounds: boolean; reminder: number | null; shuffle: boolean }
-export type Photo = { id: string; time: number } // time: ms since epoch (0 = unknown)
+// reminder = minutes after midnight; shuffle off = newest first; year = the deck shows only that year (0 = undated photos)
+export type Settings = { haptics: boolean; motion: boolean; sounds: boolean; reminder: number | null; shuffle: boolean; year: number | null }
+export type Photo = { id: string; time: number; fav: boolean; year: number } // time: ms since epoch (0 = unknown); year: yearOf(time)
 export type Data = {
   onboarded: boolean
   goal: number
@@ -33,17 +33,19 @@ export const initialData: Data = {
   unlocked: {},
   bytesFreed: 0,
   library: 0,
-  settings: { haptics: true, motion: true, sounds: true, reminder: null, shuffle: true },
+  settings: { haptics: true, motion: true, sounds: true, reminder: null, shuffle: true, year: null },
 }
+
+export const yearOf = (time: number) => (time ? new Date(time).getFullYear() : 0) // pre-1970 scans are negative, not unknown
 
 // Shots within a minute of a group's first one stay together when shuffled, so near-duplicates can be compared.
 // The cap stops a bulk import (thousands with one timestamp) from becoming one unshuffled block.
 const BURST = 60_000
 const BURST_MAX = 12
 
-// The deck: undecided photos, newest first or shuffled.
-export function arrange(photos: Photo[], decisions: Data['decisions'], shuffle: boolean, rand = Math.random) {
-  const left = photos.filter(p => !decisions[p.id]).sort((a, b) => b.time - a.time)
+// The deck: undecided photos (of one year, if picked), newest first or shuffled.
+export function arrange(photos: Photo[], decisions: Data['decisions'], shuffle: boolean, year: number | null, rand = Math.random) {
+  const left = photos.filter(p => !decisions[p.id] && (year == null || p.year === year)).sort((a, b) => b.time - a.time)
   if (!shuffle) return left
   const groups: Photo[][] = []
   for (const p of left) {
@@ -57,6 +59,18 @@ export function arrange(photos: Photo[], decisions: Data['decisions'], shuffle: 
   }
   return groups.flat()
 }
+
+// [year, photos left] for every year in the library, newest first; undated (0) last.
+export function yearsLeft(photos: Photo[], decisions: Data['decisions']) {
+  const n = new Map<number, number>()
+  for (const p of photos) n.set(p.year, (n.get(p.year) ?? 0) + (decisions[p.id] ? 0 : 1))
+  return [...n].sort((a, b) => (a[0] && b[0] ? b[0] - a[0] : a[0] ? -1 : 1))
+}
+
+export type Season = 'winter' | 'spring' | 'summer' | 'autumn'
+const SEASONS: Season[] = ['winter', 'spring', 'summer', 'autumn']
+// Meteorological seasons (December starts winter), flipped south of the equator.
+export const seasonOf = (d: Date, south = false) => SEASONS[(Math.floor(((d.getMonth() + 1) % 12) / 3) + (south ? 2 : 0)) % 4]
 
 const pad = (n: number) => String(n).padStart(2, '0')
 export const dayKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`

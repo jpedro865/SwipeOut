@@ -33,7 +33,17 @@ export const fr: Dict = {
   'swipe.didKeep': 'Gardée',
   'swipe.didDelete': 'À supprimer',
   'deck.photo': 'Photo',
+  'deck.favorite': 'favorite',
   'deck.hint': 'Glisse à droite pour garder, à gauche pour mettre à supprimer',
+
+  'year.all': 'Toutes',
+  'year.allA11y': 'Toutes les années',
+  'year.choose': 'Choisir une année',
+  'year.undated': 'Sans date',
+  'year.left': ['{y}, {n} photo restante', '{y}, {n} photos restantes'],
+  'year.sorted': '{y}, tout est trié',
+  'year.done': 'Tout est trié !',
+  'year.next': 'Continuer avec {y}',
 
   'review.title': 'Dernier coup d’œil',
   'review.help': 'Touche pour garder · rien n’est supprimé sans ta confirmation',
@@ -175,6 +185,10 @@ export const fr: Dict = {
   'ach.streak100': 'Légende vivante',
   'ach.streak.d': 'Série de {n} jours',
 
+  'season.spring': 'Printemps {y}',
+  'season.summer': 'Été {y}',
+  'season.autumn': 'Automne {y}',
+  'season.winter': 'Hiver {y}',
   'unit.kb': 'ko',
   'unit.mb': 'Mo',
   'unit.gb': 'Go',
