@@ -1,0 +1,31 @@
+# Keeps the SHA-pinned actions and the locked release tooling current.
+# The app's own npm deps are left out on purpose: Expo SDK upgrades go through `npx expo install --fix`.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: npm
+    directory: /.github/release
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      release-tooling:
+        patterns: ['*']
+    ignore:
+      # 10.x needs conventional-changelog-writer 9, which @semantic-release/release-notes-generator 14 lacks.
+      - dependency-name: conventional-changelog-conventionalcommits
+        update-types: ['version-update:semver-major']
+    commit-message:
+      prefix: ci
