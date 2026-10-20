@@ -26,7 +26,7 @@ export default function Profile() {
 const Body = memo(function Body({ data, update }: { data: Data; update: ReturnType<typeof useStore>['update'] }) {
   const th = useTheme()
   const { level, into, span, points } = xp(data)
-  const { reminder, haptics, motion, sounds } = data.settings
+  const { reminder, haptics, motion, sounds, shuffle } = data.settings
   const set = (patch: Partial<Settings>) => update(s => ({ ...s, settings: { ...s.settings, ...patch } }))
 
   const pickGoal = (n: number) => {
@@ -172,6 +172,8 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
               )
             })}
           </View>
+          {divider}
+          {toggle('shuffle', th.coral, t('profile.shuffle'), shuffle, v => set({ shuffle: v }))}
           {divider}
           {toggle('sounds', th.mint, t('profile.sounds'), sounds, v => {
             set({ sounds: v })

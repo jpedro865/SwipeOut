@@ -99,6 +99,7 @@ export const fr: Dict = {
   'profile.settings': 'Réglages',
   'profile.goal': 'Objectif quotidien',
   'profile.perDay': '{n} photos par jour',
+  'profile.shuffle': 'Ordre aléatoire',
   'profile.sounds': 'Sons',
   'profile.soundsNote': 'Coupés quand ton téléphone est en silencieux',
   'profile.haptics': 'Vibrations',

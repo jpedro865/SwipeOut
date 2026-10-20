@@ -106,6 +106,7 @@ const en = {
   'profile.settings': 'Settings',
   'profile.goal': 'Daily goal',
   'profile.perDay': '{n} photos a day',
+  'profile.shuffle': 'Shuffle photos',
   'profile.sounds': 'Sounds',
   'profile.soundsNote': 'Muted when your phone is on silent',
   'profile.haptics': 'Haptic feedback',

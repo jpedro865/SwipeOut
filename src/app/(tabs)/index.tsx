@@ -1,11 +1,11 @@
 import { addListener, type PermissionResponse } from 'expo-media-library'
 import { router, useIsFocused } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AccessibilityInfo, ActivityIndicator, Animated, AppState, Linking, Platform, Pressable, Text, View, useAnimatedValue } from 'react-native'
 import { Deck, type Choice, type DeckRef } from '../../components/Deck'
 import { achTitle, fmtNum, t } from '../../i18n'
-import { ACHIEVEMENTS, CHEERS, dayKey, decide, met, setLibrary, stats, streak, undo } from '../../logic'
-import { allPhotoIds, getPermission, pickMorePhotos, requestPermission } from '../../media'
+import { ACHIEVEMENTS, CHEERS, arrange, dayKey, decide, met, setLibrary, stats, streak, undo, type Photo } from '../../logic'
+import { allPhotos, getPermission, pickMorePhotos, requestPermission } from '../../media'
 import { play } from '../../sound'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
@@ -20,36 +20,42 @@ export default function Swipe() {
   const focused = useIsFocused()
   const deck = useRef<DeckRef>(null)
   const [perm, setPerm] = useState<PermissionResponse | null>(null)
-  const [queue, setQueue] = useState<string[] | null>(null)
-  const [idx, setIdx] = useState(0)
+  const [photos, setPhotos] = useState<Photo[] | null>(null) // the whole library, from the last sweep
   const [toast, setToast] = useState<Toast | null>(null)
   const [failed, setFailed] = useState(false)
   const decidedOn = useRef<Record<string, string>>({}) // id -> day it was counted on, so undo after midnight fixes the right day
   const latest = useRef(data)
   latest.current = data
-  const { haptics, sounds, motion } = data.settings
+  const { haptics, sounds, motion, shuffle } = data.settings
 
   const load = async () => {
     setFailed(false)
     try {
       const p = await getPermission()
       setPerm(p)
-      setQueue(null)
+      setPhotos(null)
       if (!p.granted) return
-      const ids = await allPhotoIds()
-      update(s => setLibrary(s, ids, dayKey()))
-      setQueue(ids.filter(id => !latest.current.decisions[id]))
-      setIdx(0)
+      const all = await allPhotos()
+      update(s => setLibrary(s, all.map(p => p.id), dayKey()))
+      setPhotos(all)
     } catch {
       setFailed(true)
-      setQueue([])
+      setPhotos([])
     }
   }
   useEffect(() => {
     load()
   }, [])
 
-  const ids = queue?.slice(idx, idx + 3) ?? []
+  // A fresh shuffle on every load, and whenever the order changes. A new queue starts at its first
+  // card in the same render (no flash of the old one); undo history starts over with it.
+  const queue = useMemo(() => photos && arrange(photos, latest.current.decisions, shuffle), [photos, shuffle])
+  const [at, setAt] = useState({ queue, idx: 0 })
+  const idx = at.queue === queue ? at.idx : 0
+  const setIdx = (i: number) => setAt({ queue, idx: i })
+
+  const cards = queue?.slice(idx, idx + 3) ?? []
+  const ids = cards.map(p => p.id)
   const stale = (!!queue && !ids.length) || (!!perm && !perm.granted && !perm.canAskAgain) // the system dialog also toggles AppState
   useEffect(() => {
     if (!stale) return
@@ -113,7 +119,7 @@ export default function Swipe() {
   }
 
   // The undo stack is the queue itself: everything before idx was decided this session.
-  const prev = queue?.[idx - 1]
+  const prev = queue?.[idx - 1]?.id
   const canUndo = !!prev && data.decisions[prev] !== 'deleted'
   const addMore = async () => {
     // iOS resolves on open, so wait for the library change. ponytail: if nothing changes, fires on the next library change.

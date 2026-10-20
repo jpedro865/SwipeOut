@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system'
 import { Asset, AssetField, MediaType, Query, getPermissionsAsync, presentPermissionsPicker, requestPermissionsAsync, type PermissionResponse } from 'expo-media-library'
 import { Platform } from 'react-native'
+import type { Photo } from './logic'
 
 // Photos only; the same list must go to the plugin config and the runtime request on Android.
 // Cast so accessPrivileges ('limited' on iOS / Android 14+) is visible; it is set at runtime.
@@ -10,10 +11,10 @@ export const pickMorePhotos = () => presentPermissionsPicker(['photo']) // no-op
 
 const PAGE = 2000
 
-// Every photo id, newest first. Ids are ph:// (iOS) or content:// (Android) and render directly in expo-image.
+// Every photo, newest first. Ids are ph:// (iOS) or content:// (Android) and render directly in expo-image.
 // ponytail: one metadata sweep per load; switch to addListener() deltas if huge libraries feel slow.
-export async function allPhotoIds() {
-  const ids: string[] = []
+export async function allPhotos() {
+  const photos = new Map<string, Photo>() // offset paging repeats an id if a photo lands mid-sweep
   for (let offset = 0; ; offset += PAGE) {
     const page = await new Query()
       .eq(AssetField.MEDIA_TYPE, MediaType.IMAGE)
@@ -21,8 +22,8 @@ export async function allPhotoIds() {
       .limit(PAGE)
       .offset(offset)
       .exeForMetadata()
-    for (const a of page) ids.push(a.id)
-    if (page.length < PAGE) return [...new Set(ids)] // offset paging repeats an id if a photo lands mid-sweep
+    for (const a of page) photos.set(a.id, { id: a.id, time: a.creationTime ?? a.modificationTime ?? 0 })
+    if (page.length < PAGE) return [...photos.values()]
   }
 }
 

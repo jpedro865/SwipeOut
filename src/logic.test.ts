@@ -1,5 +1,5 @@
 // Run: npm test  (plain node + asserts, no framework)
-import { addDays, applyFreezes, decide, initialData, longestStreak, markDeleted, setGoal, setLibrary, stats, streak, undo, xp, type Data } from './logic.ts'
+import { addDays, applyFreezes, arrange, decide, initialData, longestStreak, markDeleted, setGoal, setLibrary, stats, streak, undo, xp, type Data, type Photo } from './logic.ts'
 
 const eq = (a: unknown, b: unknown) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${JSON.stringify(a)} !== ${JSON.stringify(b)}`)
@@ -92,4 +92,23 @@ eq(xp({ ...initialData }).level, 1)
 eq(xp(goal({ ...initialData, goal: 200 }, T, 99)).level, 1) // 99 XP
 eq(xp(goal({ ...initialData, goal: 200 }, T, 100)).points, 200) // 100 reviewed + Photo Rookie
 eq(xp(goal({ ...initialData, goal: 25 }, T, 25)).level, 1) // 25 + 25 goal day = 50
+// deck order: decided photos drop out, shuffling keeps bursts together
+const at = (y: number, mo: number, d: number, sec = 0) => new Date(y, mo, d, 12, 0, sec).getTime()
+const ph = (id: string, time: number): Photo => ({ id, time })
+const lib: Photo[] = [ph('b1', at(2024, 6, 14, 0)), ph('b2', at(2024, 6, 14, 5)), ph('b3', at(2024, 6, 14, 9)), ph('old', at(2019, 0, 2)), ph('new', at(2025, 11, 24)), ph('undated', 0), ph('done', at(2019, 5, 1))]
+const dec: Data['decisions'] = { done: 'keep' }
+const ids = (ps: Photo[]) => ps.map(p => p.id)
+eq(ids(arrange(lib, dec, false)), ['new', 'b3', 'b2', 'b1', 'old', 'undated'])
+for (let k = 0; k < 20; k++) {
+  const r = ids(arrange(lib, dec, true))
+  eq([...r].sort(), ['b1', 'b2', 'b3', 'new', 'old', 'undated']) // a permutation of what's left
+  const i = r.indexOf('b3')
+  eq(r.slice(i, i + 3), ['b3', 'b2', 'b1'])
+}
+// a long session shot every 40s doesn't chain into one unshuffled block; neither does a bulk import with one timestamp
+const chain = Array.from({ length: 30 }, (_, i) => ph(`c${i}`, at(2019, 4, 1) + i * 40_000))
+ok(ids(arrange(chain, {}, true)).join() !== ids(arrange(chain, {}, false)).join())
+const pile = Array.from({ length: 120 }, (_, i) => ph(`p${i}`, at(2020, 1, 1)))
+ok(ids(arrange(pile, {}, true)).join() !== ids(pile).join())
+
 console.log('logic ok')

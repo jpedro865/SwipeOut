@@ -3,7 +3,9 @@
 type Decision = 'keep' | 'delete' | 'deleted'
 // done: today's rewards were granted; earned: that grant included a streak freeze
 export type Day = { reviewed: number; goal: number; done?: boolean; earned?: boolean; frozen?: boolean }
-export type Settings = { haptics: boolean; motion: boolean; sounds: boolean; reminder: number | null } // reminder = minutes after midnight
+// reminder = minutes after midnight; shuffle off = newest first
+export type Settings = { haptics: boolean; motion: boolean; sounds: boolean; reminder: number | null; shuffle: boolean }
+export type Photo = { id: string; time: number } // time: ms since epoch (0 = unknown)
 export type Data = {
   onboarded: boolean
   goal: number
@@ -31,7 +33,29 @@ export const initialData: Data = {
   unlocked: {},
   bytesFreed: 0,
   library: 0,
-  settings: { haptics: true, motion: true, sounds: true, reminder: null },
+  settings: { haptics: true, motion: true, sounds: true, reminder: null, shuffle: true },
+}
+
+// Shots within a minute of a group's first one stay together when shuffled, so near-duplicates can be compared.
+// The cap stops a bulk import (thousands with one timestamp) from becoming one unshuffled block.
+const BURST = 60_000
+const BURST_MAX = 12
+
+// The deck: undecided photos, newest first or shuffled.
+export function arrange(photos: Photo[], decisions: Data['decisions'], shuffle: boolean, rand = Math.random) {
+  const left = photos.filter(p => !decisions[p.id]).sort((a, b) => b.time - a.time)
+  if (!shuffle) return left
+  const groups: Photo[][] = []
+  for (const p of left) {
+    const g = groups[groups.length - 1]
+    if (g && p.time && g.length < BURST_MAX && g[0].time - p.time < BURST) g.push(p)
+    else groups.push([p])
+  }
+  for (let i = groups.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[groups[i], groups[j]] = [groups[j], groups[i]]
+  }
+  return groups.flat()
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')

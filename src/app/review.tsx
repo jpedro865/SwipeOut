@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, FlatList, Modal, Platform, Pressable, View } from 'react-native'
 import { fmtBytes, fmtNum, t } from '../i18n'
 import { dayKey, markDeleted, setDecision } from '../logic'
-import { allPhotoIds, deletePhotos, sizeOf } from '../media'
+import { allPhotos, deletePhotos, sizeOf } from '../media'
 import { play } from '../sound'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
@@ -60,7 +60,7 @@ export default function Review() {
       return
     }
     // The OS can resolve without removing everything (ids already gone, Android 7-10 per-file failures): record only what left.
-    const left = new Set(await allPhotoIds().catch(() => []))
+    const left = new Set((await allPhotos().catch(() => [])).map(p => p.id))
     const gone = del.filter(id => !left.has(id))
     const freed = sum(gone, known.current)
     if (gone.length) {
