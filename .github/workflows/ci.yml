@@ -1,0 +1,468 @@
+name: CI
+
+# PRs, and master runs with nothing to release: typecheck, tests and unsigned native builds.
+# master with releasable commits (feat/fix/perf): semantic-release picks the version, both apps are
+# built, signed and pushed to private GitHub Packages, then the commit is tagged with release notes.
+# Binaries never touch workflow artifacts or GitHub Releases: both are public on a public repo.
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch: # on master, releases like a push
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }} # never cancel a release in flight
+
+env:
+  NODE_VERSION: '24'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    name: Typecheck & tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Conventional Commits # the PR title is checked by pr-title.yml
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bad=$(git log --no-merges --format=%s "$BASE..$HEAD" \
+            | grep -vE '^((feat|fix|perf|refactor|revert|build|ci|chore|docs|style|test)(\([a-z0-9-]+\))?!?: .+|Revert ".+")$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Commit subjects must follow Conventional Commits, e.g. 'fix(swipe): ...'. Offending:"
+            echo "$bad"
+            exit 1
+          fi
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npx -y expo-doctor@1.21.5
+
+  version:
+    name: Next version
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # semantic-release checks push access even in --dry-run
+    outputs:
+      version: ${{ steps.next.outputs.version }} # empty: nothing to release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --prefix .github/release --ignore-scripts
+      - id: next
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .github/release/node_modules/.bin/semantic-release --dry-run
+
+  # Bash only: the signing secrets never share a job with third-party code until they're needed.
+  gate:
+    name: Release gate
+    needs: version
+    if: needs.version.outputs.version != ''
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      release: ${{ steps.gate.outputs.release }}
+      build: ${{ steps.gate.outputs.build }}
+    steps:
+      - id: gate
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+          IOS_DIST_P12_BASE64: ${{ secrets.IOS_DIST_P12_BASE64 }}
+          IOS_DIST_P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+          IOS_PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          missing=""
+          for s in ANDROID_UPLOAD_KEYSTORE_BASE64 ANDROID_UPLOAD_STORE_PASSWORD ANDROID_UPLOAD_KEY_ALIAS \
+                   ANDROID_UPLOAD_KEY_PASSWORD IOS_DIST_P12_BASE64 IOS_DIST_P12_PASSWORD IOS_PROFILE_BASE64 GHCR_TOKEN; do
+            [ -n "${!s}" ] || missing="$missing $s"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning title=v$VERSION not released::Missing signing secrets:$missing (see docs/RELEASING.md). Builds ran unsigned."
+            exit 0
+          fi
+          # Store build numbers must only grow: derive them from semver (1.2.3 -> 1002003).
+          IFS=. read -r major minor patch <<< "$VERSION"
+          echo "release=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_OUTPUT"
+
+  # Verify builds: PRs, and master runs that don't release. No secrets.
+  android:
+    name: Android (verify)
+    needs: [checks, version, gate]
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.version.result != 'failure' && needs.gate.result != 'failure' && needs.gate.outputs.release == '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17' # the RN Gradle plugin pins jvmToolchain(17)
+      - run: npm ci
+      - name: Install the NDK React Native pins
+        run: |
+          ndk=$(sed -n 's/^ndkVersion = "\(.*\)"$/\1/p' node_modules/react-native/gradle/libs.versions.toml)
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" < <(yes) > /dev/null
+      - run: npx expo prebuild --platform android --no-install
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic # keys on **/*.gradle*, which only exist after npm ci + prebuild
+      - name: Release build (debug-signed, arm64 only)
+        working-directory: android
+        run: ./gradlew assembleRelease --max-workers=4 -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+
+  ios:
+    name: iOS (verify)
+    needs: [checks, version, gate]
+    if: ${{ !cancelled() && needs.checks.result == 'success' && needs.version.result != 'failure' && needs.gate.result != 'failure' && needs.gate.outputs.release == '' }}
+    runs-on: macos-26
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      LANG: en_US.UTF-8 # CocoaPods needs a UTF-8 locale
+      LC_ALL: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version # Expo SDK 58 needs >= 26.4
+      - run: npm ci
+      - run: npx expo prebuild --platform ios --no-install
+      - run: pod install --project-directory=ios # own step: prebuild swallows pod failures
+      - name: Unsigned device archive
+        run: |
+          xcodebuild -workspace ios/SwipeOut.xcworkspace -scheme SwipeOut -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/SwipeOut.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO archive > "$RUNNER_TEMP/xcodebuild.log" 2>&1 \
+            || { tail -200 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+
+  # Release builds: secrets come from the `production` environment (master only).
+  # Each job pushes its binaries to a pre-created private package with GHCR_TOKEN; this public repo's
+  # GITHUB_TOKEN gets no package access, since fork PRs could request packages: read with it.
+  # Tagging happens once both pushes succeed.
+  android-release:
+    name: Android (signed)
+    needs: gate
+    if: needs.gate.outputs.release != ''
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      APP_VERSION: ${{ needs.gate.outputs.release }} # read by app.config.js at prebuild
+      BUILD_NUMBER: ${{ needs.gate.outputs.build }}
+      PACKAGE: android
+    steps:
+      - uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+        with:
+          version: 1.3.4
+      - name: Check the release target
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: &release-preflight |
+          # A re-run of an old run must never overwrite a version that is already tagged.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/tags/v$APP_VERSION")
+          case "$code" in
+            404) ;;
+            200) echo "::error::v$APP_VERSION is already released; start a new run instead of re-running this one"; exit 1 ;;
+            *) echo "::error::Could not check for tag v$APP_VERSION (HTTP $code)"; exit 1 ;;
+          esac
+          # The package must already exist, be writable with GHCR_TOKEN and be private (docs/RELEASING.md).
+          image="ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')/$PACKAGE"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          auth="$RUNNER_TEMP/ghcr-auth.json"
+          echo "$GHCR_TOKEN" | oras login ghcr.io -u "$GITHUB_REPOSITORY_OWNER" --password-stdin --registry-config "$auth"
+          if ! found=$(oras repo tags --registry-config "$auth" "$image" 2>&1); then
+            rm -f "$auth"
+            echo "::error::$image must exist as a private package that GHCR_TOKEN can write to: $found"
+            exit 1
+          fi
+          rm -f "$auth"
+          echo '{}' > "$RUNNER_TEMP/anonymous.json"
+          if out=$(oras repo tags --registry-config "$RUNNER_TEMP/anonymous.json" "$image" 2>&1); then
+            echo "::error::$image is public; refusing to publish proprietary binaries"
+            exit 1
+          elif ! echo "$out" | grep -qiE 'denied|unauthorized'; then
+            echo "::error::Could not confirm $image is private: $out"
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }} # no shared caches in jobs that hold signing keys
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci
+      - name: Install the NDK React Native pins
+        run: |
+          ndk=$(sed -n 's/^ndkVersion = "\(.*\)"$/\1/p' node_modules/react-native/gradle/libs.versions.toml)
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$ndk" < <(yes) > /dev/null
+      - run: npx expo prebuild --platform android --no-install
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-disabled: true
+      - name: Decode upload keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+      - name: Signed release build (AAB + APK)
+        working-directory: android
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          ./gradlew bundleRelease assembleRelease --max-workers=4 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload.jks" \
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+      - name: Check signatures and stage artifacts
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          # If any signing property is missing, AGP silently signs with the public debug key instead.
+          hex() { tr -d ': ' | tr 'A-F' 'a-f'; }
+          tools=$(sed -n 's/^buildTools = "\(.*\)"$/\1/p' node_modules/react-native/gradle/libs.versions.toml)
+          out=android/app/build/outputs
+          want=$(keytool -J-Duser.language=en -list -v -keystore "$RUNNER_TEMP/upload.jks" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" | awk '/SHA256:/{print $2; exit}' | hex)
+          apk=$("$ANDROID_HOME/build-tools/$tools/apksigner" verify --print-certs "$out/apk/release/app-release.apk" | awk '/certificate SHA-256 digest/{print $NF; exit}' | hex)
+          aab=$(keytool -J-Duser.language=en -printcert -jarfile "$out/bundle/release/app-release.aab" | awk '/SHA256:/{print $2; exit}' | hex)
+          if [ -z "$want" ] || [ "$apk" != "$want" ] || [ "$aab" != "$want" ]; then
+            echo "::error::Release artifacts are not signed with the upload key (want=$want apk=$apk aab=$aab)"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$out/bundle/release/app-release.aab" "dist/swipeout-$APP_VERSION.aab"
+          cp "$out/apk/release/app-release.apk" "dist/swipeout-$APP_VERSION.apk"
+          cp "$out/mapping/release/mapping.txt" "dist/swipeout-$APP_VERSION-mapping.txt"
+      - name: Push to GitHub Packages
+        working-directory: dist # oras rejects absolute paths; layer titles become the file names
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          auth="$RUNNER_TEMP/ghcr-auth.json"
+          trap 'rm -f "$auth"' EXIT
+          echo "$GHCR_TOKEN" | oras login ghcr.io -u "$GITHUB_REPOSITORY_OWNER" --password-stdin --registry-config "$auth"
+          # No image.source annotation: a package linked to this public repo would inherit its access.
+          oras push --registry-config "$auth" "$IMAGE:$APP_VERSION" --artifact-type application/vnd.swipeout.android.release.v1 \
+            -a "org.opencontainers.image.version=$APP_VERSION" \
+            -a "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -a "org.opencontainers.image.licenses=LicenseRef-Proprietary" \
+            "swipeout-$APP_VERSION.aab:application/vnd.android.aab" \
+            "swipeout-$APP_VERSION.apk:application/vnd.android.package-archive" \
+            "swipeout-$APP_VERSION-mapping.txt:text/plain"
+      - name: Remove upload keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+
+  ios-release:
+    name: iOS (signed)
+    needs: gate
+    if: needs.gate.outputs.release != ''
+    environment: production
+    runs-on: macos-26
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      APP_VERSION: ${{ needs.gate.outputs.release }} # read by app.config.js at prebuild
+      BUILD_NUMBER: ${{ needs.gate.outputs.build }}
+      PACKAGE: ios
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    steps:
+      - uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+        with:
+          version: 1.3.4
+      - name: Check the release target
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: *release-preflight
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
+      - run: npm ci
+      - run: npx expo prebuild --platform ios --no-install
+      - run: pod install --project-directory=ios
+      - name: Install signing identity
+        env:
+          P12_BASE64: ${{ secrets.IOS_DIST_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_DIST_P12_PASSWORD }}
+          PROFILE_BASE64: ${{ secrets.IOS_PROFILE_BASE64 }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_pw=$(openssl rand -base64 32)
+          echo "::add-mask::$keychain_pw"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          echo "$PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/app.mobileprovision"
+          security create-keychain -p "$keychain_pw" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_pw" "$keychain"
+          security import "$RUNNER_TEMP/dist.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_pw" "$keychain" > /dev/null
+          # shellcheck disable=SC2046 # keep the existing search list (space-free paths) after ours
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/dist.p12"
+          security cms -D -i "$RUNNER_TEMP/app.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          uuid=$(plutil -extract UUID raw -o - "$RUNNER_TEMP/profile.plist")
+          team=$(plutil -extract TeamIdentifier.0 raw -o - "$RUNNER_TEMP/profile.plist")
+          for d in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+            mkdir -p "$d"
+            cp "$RUNNER_TEMP/app.mobileprovision" "$d/$uuid.mobileprovision"
+          done
+          { echo "KEYCHAIN=$keychain"; echo "PROFILE_UUID=$uuid"; echo "TEAM_ID=$team"; } >> "$GITHUB_ENV"
+      - name: Signed archive
+        run: |
+          xcodebuild -workspace ios/SwipeOut.xcworkspace -scheme SwipeOut -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/SwipeOut.xcarchive" \
+            CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN" \
+            archive > "$RUNNER_TEMP/xcodebuild.log" 2>&1 \
+            || { tail -200 "$RUNNER_TEMP/xcodebuild.log"; exit 1; }
+      - name: Export IPA
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict><key>app.swipeout</key><string>$PROFILE_UUID</string></dict>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/SwipeOut.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/export"
+          mkdir -p dist
+          mv "$RUNNER_TEMP"/export/*.ipa "dist/swipeout-$APP_VERSION.ipa"
+          (cd "$RUNNER_TEMP/SwipeOut.xcarchive" && zip -qry "$GITHUB_WORKSPACE/dist/swipeout-$APP_VERSION-dSYMs.zip" dSYMs)
+      - name: Push to GitHub Packages
+        working-directory: dist # oras rejects absolute paths; layer titles become the file names
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          auth="$RUNNER_TEMP/ghcr-auth.json"
+          trap 'rm -f "$auth"' EXIT
+          echo "$GHCR_TOKEN" | oras login ghcr.io -u "$GITHUB_REPOSITORY_OWNER" --password-stdin --registry-config "$auth"
+          # No image.source annotation: a package linked to this public repo would inherit its access.
+          oras push --registry-config "$auth" "$IMAGE:$APP_VERSION" --artifact-type application/vnd.swipeout.ios.release.v1 \
+            -a "org.opencontainers.image.version=$APP_VERSION" \
+            -a "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -a "org.opencontainers.image.licenses=LicenseRef-Proprietary" \
+            "swipeout-$APP_VERSION.ipa:application/vnd.apple.ipa" \
+            "swipeout-$APP_VERSION-dSYMs.zip:application/zip"
+      - name: Remove signing material
+        if: always()
+        run: |
+          if [ -n "${KEYCHAIN:-}" ]; then security delete-keychain "$KEYCHAIN" || true; fi
+          rm -f "$RUNNER_TEMP/app.mobileprovision" \
+            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/${PROFILE_UUID:-none}.mobileprovision" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/${PROFILE_UUID:-none}.mobileprovision"
+
+  release:
+    name: Tag & release notes
+    needs: [gate, android-release, ios-release]
+    if: needs.gate.outputs.release != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci --prefix .github/release --ignore-scripts
+      - name: Tag and write release notes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_VERSION: ${{ needs.gate.outputs.release }} # refuse to tag a version other than the one built
+        run: .github/release/node_modules/.bin/semantic-release
+      - name: Summary
+        env:
+          VERSION: ${{ needs.gate.outputs.release }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          if git tag --points-at HEAD | grep -qx "v$VERSION"; then
+            {
+              echo "### SwipeOut v$VERSION"
+              echo "- \`oras pull $image/android:$VERSION\`: AAB for Google Play, APK, R8 mapping"
+              echo "- \`oras pull $image/ios:$VERSION\`: IPA for App Store Connect, dSYMs"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::v$VERSION was built but not tagged because master moved on; the next master run releases it."
+          fi
