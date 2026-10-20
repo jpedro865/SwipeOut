@@ -1,0 +1,14 @@
+{
+  "branches": ["master"],
+  "plugins": [
+    ["@semantic-release/commit-analyzer", { "preset": "conventionalcommits" }],
+    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    ["@semantic-release/exec", {
+      "verifyReleaseCmd": "echo \"version=${nextRelease.version}\" >> \"$GITHUB_OUTPUT\" && { [ -z \"$EXPECTED_VERSION\" ] || [ \"$EXPECTED_VERSION\" = \"${nextRelease.version}\" ]; }"
+    }],
+    ["@semantic-release/github", {
+      "successCommentCondition": false,
+      "failCommentCondition": false
+    }]
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "description": "Locked release tooling for CI. Keep conventional-changelog-conventionalcommits on 9.x until @semantic-release/release-notes-generator supports 10.x.",
+  "devDependencies": {
+    "@semantic-release/exec": "7.1.0",
+    "conventional-changelog-conventionalcommits": "9.3.1",
+    "semantic-release": "25.0.9"
+  }
+}
