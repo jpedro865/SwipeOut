@@ -3,7 +3,7 @@
 type Decision = 'keep' | 'delete' | 'deleted'
 // done: today's rewards were granted; earned: that grant included a streak freeze
 export type Day = { reviewed: number; goal: number; done?: boolean; earned?: boolean; frozen?: boolean }
-export type Settings = { haptics: boolean; motion: boolean; reminder: number | null } // reminder = minutes after midnight
+export type Settings = { haptics: boolean; motion: boolean; sounds: boolean; reminder: number | null } // reminder = minutes after midnight
 export type Data = {
   onboarded: boolean
   goal: number
@@ -31,7 +31,7 @@ export const initialData: Data = {
   unlocked: {},
   bytesFreed: 0,
   library: 0,
-  settings: { haptics: true, motion: true, reminder: null },
+  settings: { haptics: true, motion: true, sounds: true, reminder: null },
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')

@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics'
+import { SymbolView, type AndroidSymbol, type SFSymbol, type SymbolWeight } from 'expo-symbols'
 import type { ReactNode } from 'react'
-import { Pressable, Text, View, type StyleProp, type TextProps, type ViewStyle } from 'react-native'
+import { Platform, Pressable, Text, View, useWindowDimensions, type StyleProp, type TextProps, type ViewStyle } from 'react-native'
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context'
 import { parseDay } from './logic'
 import { useTheme } from './theme'
@@ -8,6 +9,72 @@ import { useTheme } from './theme'
 export function Screen({ children, edges = ['top'] }: { children: ReactNode; edges?: Edge[] }) {
   const t = useTheme()
   return <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: t.bg }}>{children}</SafeAreaView>
+}
+
+// One meaning per icon, everywhere: [SF Symbol (iOS 16.4+), Material Symbol (Android)].
+const ICONS = {
+  keep: ['checkmark', 'check'],
+  trash: ['trash.fill', 'delete'],
+  deleted: ['xmark.bin.fill', 'delete_forever'],
+  undo: ['arrow.uturn.backward', 'undo'],
+  close: ['xmark', 'close'],
+  streak: ['flame.fill', 'local_fire_department'],
+  freeze: ['snowflake', 'ac_unit'],
+  goal: ['target', 'target'],
+  done: ['checkmark.seal.fill', 'verified'],
+  photos: ['rectangle.stack.fill', 'style'],
+  library: ['photo.on.rectangle.angled', 'photo_library'],
+  add: ['plus.circle.fill', 'add_photo_alternate'],
+  calendar: ['calendar', 'calendar_month'],
+  all: ['infinity', 'all_inclusive'],
+  expand: ['chevron.down', 'expand_more'],
+  prev: ['chevron.left', 'chevron_left'],
+  next: ['chevron.right', 'chevron_right'],
+  back: ['chevron.left', 'arrow_back'],
+  storage: ['internaldrive', 'hard_drive'],
+  favorite: ['heart.fill', 'favorite'],
+  spring: ['camera.macro', 'local_florist'],
+  summer: ['sun.max.fill', 'sunny'],
+  autumn: ['leaf.fill', 'eco'],
+  winter: ['cloud.snow.fill', 'weather_snowy'],
+  celebrate: ['party.popper.fill', 'celebration'],
+  sparkles: ['sparkles', 'auto_awesome'],
+  achievement: ['rosette', 'military_tech'],
+  xp: ['star.fill', 'star'],
+  trophy: ['trophy.fill', 'trophy'],
+  shuffle: ['shuffle', 'shuffle'],
+  sounds: ['speaker.wave.2.fill', 'volume_up'],
+  haptics: ['iphone.radiowaves.left.and.right', 'vibration'],
+  reminder: ['bell.fill', 'notifications'],
+  minus: ['minus', 'remove'],
+  plus: ['plus', 'add'],
+  language: ['globe', 'language'],
+  privacy: ['hand.raised.fill', 'privacy_tip'],
+  safe: ['checkmark.shield.fill', 'verified_user'],
+  error: ['exclamationmark.triangle.fill', 'warning'],
+  time: ['clock', 'schedule'],
+  tap: ['hand.tap.fill', 'touch_app'],
+  lock: ['lock.fill', 'lock'],
+} satisfies Record<string, [SFSymbol, AndroidSymbol]>
+export type IconName = keyof typeof ICONS
+
+// Decorative: the control around it carries the accessibility label. Android takes no weight (each is a ~1 MB font).
+// Android draws the glyph as scalable text in a fixed box, so cancel the system font scale to keep it inside.
+export function Icon({ n, size = 20, color, weight = 'semibold' }: { n: IconName; size?: number; color?: string; weight?: SymbolWeight }) {
+  const t = useTheme()
+  const { fontScale } = useWindowDimensions()
+  const [ios, android] = ICONS[n]
+  const box = Platform.OS === 'android' ? { size: size / fontScale, style: { width: size, height: size } } : { size }
+  return (
+    <SymbolView
+      name={{ ios, android }}
+      {...box}
+      tintColor={color ?? t.text}
+      weight={weight}
+      accessible={false}
+      importantForAccessibility="no"
+    />
+  )
 }
 
 const variants = {
@@ -29,14 +96,16 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 }
 
 // Pill button. Solid buttons use a brand fill with Midnight text.
-export function Button({ title, onPress, outline, disabled, style }: {
+export function Button({ title, icon, onPress, outline, disabled, style }: {
   title: string
+  icon?: IconName
   onPress: () => void
   outline?: boolean
   disabled?: boolean
   style?: StyleProp<ViewStyle>
 }) {
   const t = useTheme()
+  const fg = outline ? t.text : t.midnight
   return (
     <Pressable
       accessibilityRole="button"
@@ -51,14 +120,18 @@ export function Button({ title, onPress, outline, disabled, style }: {
           borderRadius: 999,
           paddingVertical: 16,
           paddingHorizontal: 24,
+          flexDirection: 'row',
+          gap: 8,
           alignItems: 'center',
+          justifyContent: 'center',
           opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,
       ]}
     >
-      <Text style={{ color: outline ? t.text : t.midnight, fontSize: 17, fontWeight: '700' }}>{title}</Text>
+      {icon && <Icon n={icon} size={18} color={fg} />}
+      <Text style={{ color: fg, fontSize: 17, fontWeight: '700' }}>{title}</Text>
     </Pressable>
   )
 }
@@ -73,16 +146,39 @@ export function Bar({ value, color }: { value: number; color?: string }) {
   )
 }
 
-export function Stat({ value, label }: { value: string | number; label: string }) {
+export function Stat({ value, label, icon, color }: { value: string | number; label: string; icon?: IconName; color?: string }) {
   return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <Txt v="title">{typeof value === 'number' ? value.toLocaleString() : value}</Txt>
-      <Txt v="small" muted>{label}</Txt>
+    <View accessible accessibilityLabel={`${value}, ${label}`} style={{ flex: 1, gap: 2 }}>
+      {icon && <Icon n={icon} size={18} color={color} />}
+      <Txt v="title" numberOfLines={1} adjustsFontSizeToFit>{typeof value === 'number' ? value.toLocaleString() : value}</Txt>
+      <Txt v="small" muted numberOfLines={2}>{label}</Txt>
     </View>
   )
 }
 
+// iOS Settings-style row: brand tile with a glyph, a label, an optional value and a control on the right.
+export function Row({ icon, tile, label, value, children, onPress }: { icon: IconName; tile: string; label: string; value?: string; children?: ReactNode; onPress?: () => void }) {
+  const t = useTheme()
+  const body = (
+    <>
+      <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: tile, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon n={icon} size={17} color={t.midnight} />
+      </View>
+      <Txt style={{ flex: 1 }}>{label}</Txt>
+      {value && <Txt muted>{value}</Txt>}
+      {children}
+    </>
+  )
+  const style = { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 } as const
+  return onPress ? (
+    <Pressable accessibilityRole="button" accessibilityLabel={value ? `${label}, ${value}` : label} onPress={onPress} style={({ pressed }) => [style, { opacity: pressed ? 0.6 : 1 }]}>{body}</Pressable>
+  ) : (
+    <View style={style}>{body}</View>
+  )
+}
+
 export const center = { textAlign: 'center' } as const
+
 export const fmtDay = (k: string) => parseDay(k).toLocaleDateString([], { month: 'short', day: 'numeric' })
 
 export function fmtBytes(n: number) {
@@ -91,8 +187,13 @@ export function fmtBytes(n: number) {
   return `${(n / 1e9).toFixed(2)} GB`
 }
 
-export function buzz(on: boolean, kind: 'tap' | 'heavy' | 'success' = 'tap') {
+// Each kind matches a sound: keep = crisp, delete = damped (never Heavy or Reject, which read as an error), select = undo/toggles.
+// Android's Vibrator makes every impact feel the same, so use its haptic engine there (Confirm needs API 30).
+const ANDROID = { tap: Haptics.AndroidHaptics.Confirm, soft: Haptics.AndroidHaptics.Virtual_Key, select: Haptics.AndroidHaptics.Clock_Tick }
+export function buzz(on: boolean, kind: 'tap' | 'soft' | 'select' | 'success' = 'tap') {
   if (!on) return
   if (kind === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-  else Haptics.impactAsync(kind === 'heavy' ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light)
+  else if (Platform.OS === 'android') Haptics.performAndroidHapticsAsync(ANDROID[kind]).catch(() => Haptics.selectionAsync())
+  else if (kind === 'select') Haptics.selectionAsync()
+  else Haptics.impactAsync(kind === 'soft' ? Haptics.ImpactFeedbackStyle.Soft : Haptics.ImpactFeedbackStyle.Light)
 }

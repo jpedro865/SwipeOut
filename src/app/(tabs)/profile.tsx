@@ -3,9 +3,10 @@ import { useIsFocused } from 'expo-router'
 import { memo, useRef } from 'react'
 import { Alert, Linking, Platform, Pressable, ScrollView, Switch, View } from 'react-native'
 import { ACHIEVEMENTS, GOALS, dayKey, setGoal, xp, type Data, type Settings } from '../../logic'
+import { play } from '../../sound'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
-import { Bar, Button, Card, Screen, Txt, fmtDay } from '../../ui'
+import { Bar, Button, Card, Icon, Row, Screen, Txt, fmtDay, type IconName } from '../../ui'
 
 const fmtTime = (m: number) => new Date(2000, 0, 1, Math.floor(m / 60), m % 60).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
@@ -35,7 +36,7 @@ export default function Profile() {
 const Body = memo(function Body({ data, update }: { data: Data; update: ReturnType<typeof useStore>['update'] }) {
   const t = useTheme()
   const { level, into, span, points } = xp(data)
-  const { reminder, haptics, motion } = data.settings
+  const { reminder, haptics, motion, sounds } = data.settings
   const set = (patch: Partial<Settings>) => update(s => ({ ...s, settings: { ...s.settings, ...patch } }))
 
   const pickGoal = (n: number) => {
@@ -66,11 +67,10 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
     schedule(20 * 60, data.goal)
   }
 
-  const toggle = (label: string, value: boolean, onValueChange: (v: boolean) => void) => (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
-      <Txt>{label}</Txt>
+  const toggle = (icon: IconName, tile: string, label: string, value: boolean, onValueChange: (v: boolean) => void) => (
+    <Row icon={icon} tile={tile} label={label}>
       <Switch accessibilityLabel={label} value={value} onValueChange={onValueChange} trackColor={{ true: t.coral, false: t.line }} thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined} />
-    </View>
+    </Row>
   )
 
   const stepBtn = (d: number) => (
@@ -80,7 +80,7 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
       onPress={() => step(d)}
       style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: t.raised }}
     >
-      <Txt v="h2">{d < 0 ? '−' : '+'}</Txt>
+      <Icon n={d < 0 ? 'minus' : 'plus'} size={18} />
     </Pressable>
   )
 
@@ -141,7 +141,14 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
               )
             })}
           </View>
-          {toggle('Daily reminder', reminder != null, toggleReminder)}
+          {toggle('sounds', t.mint, 'Sounds', sounds, v => {
+            set({ sounds: v })
+            play('keep', v) // a taste of what you turned on
+          })}
+          <Txt v="small" muted style={{ marginLeft: 42, marginTop: -8 }}>Muted when your phone is on silent</Txt>
+          {toggle('haptics', t.lavender, 'Haptic feedback', haptics, v => set({ haptics: v }))}
+          {toggle('sparkles', t.coral, 'Animations & celebrations', motion, v => set({ motion: v }))}
+          {toggle('reminder', t.lavender, 'Daily reminder', reminder != null, toggleReminder)}
           {reminder != null && (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
               {stepBtn(-30)}
@@ -149,8 +156,6 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
               {stepBtn(30)}
             </View>
           )}
-          {toggle('Haptic feedback', haptics, v => set({ haptics: v }))}
-          {toggle('Animations & celebrations', motion, v => set({ motion: v }))}
         </Card>
 
         <Card>

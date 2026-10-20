@@ -2,6 +2,7 @@ import { router } from 'expo-router'
 import { useEffect } from 'react'
 import { Animated, ScrollView, StyleSheet, View, useAnimatedValue, useWindowDimensions } from 'react-native'
 import { ACHIEVEMENTS, dayKey, milestone, stats, streak } from '../logic'
+import { play } from '../sound'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
 import { Button, Card, Stat, Txt, buzz, center } from '../ui'
@@ -21,6 +22,7 @@ export default function Complete() {
 
   useEffect(() => {
     buzz(data.settings.haptics, 'success')
+    play('goal', data.settings.sounds)
     if (motion) Animated.timing(p, { toValue: 1, duration: 1800, useNativeDriver: true }).start()
   }, [])
 

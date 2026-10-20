@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, FlatList, Modal, Platform, Pressable, View } from 'react-native'
 import { dayKey, markDeleted, setDecision } from '../logic'
 import { allPhotoIds, deletePhotos, sizeOf } from '../media'
+import { play } from '../sound'
 import { useStore } from '../store'
 import { useTheme } from '../theme'
 import { Button, Screen, Txt, buzz, center, fmtBytes } from '../ui'
@@ -43,7 +44,7 @@ export default function Review() {
   const bytes = sizes && sum(marked, sizes)
 
   const toggle = (id: string) => {
-    buzz(data.settings.haptics, 'tap')
+    buzz(data.settings.haptics, 'select')
     update(s => setDecision(s, id, s.decisions[id] === 'delete' ? 'keep' : 'delete'))
   }
 
@@ -65,6 +66,7 @@ export default function Review() {
     if (gone.length) {
       update(s => markDeleted(s, gone, freed, dayKey()))
       buzz(data.settings.haptics, 'success')
+      play('cleared', data.settings.sounds)
     }
     setDone({ n: gone.length, bytes: freed, stuck: del.length - gone.length })
     setBusy(false)
