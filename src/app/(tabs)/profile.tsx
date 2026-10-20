@@ -69,7 +69,7 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
   const toggle = (label: string, value: boolean, onValueChange: (v: boolean) => void) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
       <Txt>{label}</Txt>
-      <Switch accessibilityLabel={label} value={value} onValueChange={onValueChange} trackColor={{ true: t.coral, false: t.line }} />
+      <Switch accessibilityLabel={label} value={value} onValueChange={onValueChange} trackColor={{ true: t.coral, false: t.line }} thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined} />
     </View>
   )
 
