@@ -43,5 +43,6 @@
         "react-native-gesture-handler"
       ]
     }
-  }
+  },
+  "license": "UNLICENSED"
 }
