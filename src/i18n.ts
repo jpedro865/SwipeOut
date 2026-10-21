@@ -162,6 +162,7 @@ const en = {
   'setup.remindAt': 'Remind me at {time}',
   'setup.on': 'Reminder on · {time}',
   'setup.off': 'Notifications are off for SwipeOut. Turn them on in Settings whenever you like.',
+  'setup.hear': 'Hear the reminder sound',
   'setup.preview': 'Preview of your reminder',
   'setup.yoursQ': 'Make it yours',
   'setup.yoursBody': 'Tap a tile to switch it. You’ll feel the difference.',

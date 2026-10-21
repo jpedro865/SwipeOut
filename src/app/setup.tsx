@@ -84,8 +84,9 @@ export default function Setup() {
     setPerm(r)
     if (r !== 'granted') return
     remind(time)
+    play('reminder', st.sounds)
     buzz(st.haptics, 'success')
-    setTimeout(() => setI(k => (k === 1 ? 2 : k)), 700) // a beat to see it land; not if they've moved on
+    setTimeout(() => setI(k => (k === 1 ? 2 : k)), 700) // a beat to hear it land; not if they've moved on
   }
 
   const header = (
@@ -146,7 +147,7 @@ export default function Setup() {
           <>
             <Txt v="title" accessibilityRole="header" style={center}>{t('setup.momentQ')}</Txt>
             <Txt muted style={center}>{t('setup.momentBody')}</Txt>
-            <LockScreen time={time} goal={goal} motion={st.motion} muted={perm === 'blocked'} onTime={pickTime} />
+            <LockScreen time={time} goal={goal} motion={st.motion} haptics={st.haptics} muted={perm === 'blocked'} onTime={pickTime} />
             <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               {MOMENTS.map(([label, icon, m]) => {
                 const on = time === m
@@ -226,7 +227,7 @@ export default function Setup() {
 }
 
 // A little lock screen: the chosen time, big, and the real reminder dropping in each time it changes.
-function LockScreen({ time, goal, motion, muted, onTime }: { time: number; goal: number; motion: boolean; muted: boolean; onTime: (m: number) => void }) {
+function LockScreen({ time, goal, motion, haptics, muted, onTime }: { time: number; goal: number; motion: boolean; haptics: boolean; muted: boolean; onTime: (m: number) => void }) {
   const drop = useAnimatedValue(1)
   useEffect(() => {
     if (!motion) return
@@ -279,6 +280,17 @@ function LockScreen({ time, goal, motion, muted, onTime }: { time: number; goal:
           </View>
         </Animated.View>
       </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('setup.hear')}
+        hitSlop={8}
+        // Ignores the in-app sound switch but follows the silent switch, like the notification; the buzz answers on silent.
+        onPress={() => { play('reminder', true); buzz(haptics, 'success') }}
+        style={({ pressed }) => [styles.hear, { backgroundColor: glass, opacity: pressed ? 0.7 : 1 }]}
+      >
+        <Icon n="sounds" size={14} color={WHITE} />
+        <Text style={{ color: WHITE, fontSize: 13, fontWeight: '700' }}>{t('setup.hear')}</Text>
+      </Pressable>
     </View>
   )
 }
@@ -357,6 +369,7 @@ const styles = StyleSheet.create({
   hero: { alignSelf: 'center', width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   lock: { gap: 14, padding: 18, borderRadius: 28, overflow: 'hidden', backgroundColor: '#171627', backgroundImage: 'linear-gradient(160deg, rgba(196,167,255,0.35) 0%, rgba(255,107,85,0.22) 50%, rgba(23,22,39,0) 100%)' },
   banner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 22 },
+  hear: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 12, borderRadius: 999 },
   moment: { flexBasis: '47%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 64, padding: 12, borderRadius: 20, borderWidth: 2 },
   dot: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   status: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },

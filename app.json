@@ -50,7 +50,10 @@
       [
         "expo-notifications",
         {
-          "enableRemoteNotifications": false
+          "enableRemoteNotifications": false,
+          "sounds": ["./assets/sounds/reminder.wav"],
+          "icon": "./assets/notification-icon.png",
+          "color": "#FF6B55"
         }
       ],
       [

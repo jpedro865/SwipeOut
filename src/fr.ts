@@ -153,6 +153,7 @@ export const fr: Dict = {
   'setup.remindAt': 'Rappelle-moi à {time}',
   'setup.on': 'Rappel activé · {time}',
   'setup.off': 'Les notifications sont coupées pour SwipeOut. Tu peux les activer dans les réglages quand tu veux.',
+  'setup.hear': 'Écouter le son du rappel',
   'setup.preview': 'Aperçu de ton rappel',
   'setup.yoursQ': 'À ta façon',
   'setup.yoursBody': 'Touche une tuile pour la changer, tu sentiras la différence.',

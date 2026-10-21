@@ -136,8 +136,17 @@ const SOUNDS = {
     tone(o, 340, 760, () => Fs6, ad(2, 350), GLASS, 0.35)
     return finish(reverb(lowpass(o, 9000), 0.9, 0.25), -8, 220)
   },
+  // Last on purpose: every sound shares one seeded noise source, so new entries go at the end to keep the others identical.
+  reminder(o) { // notification sonic logo, short-short-long: swipe-right swish -> the keep "bloop" pair A5 -> D6 -> F#6 glass ring over D6
+    noise(o, 0, 260, sweep(800, 3200, 220), 1.3, swell(170, 45), 1.2)
+    tone(o, 150, 220, glide(A5, 0.94, 14), ad(4, 55), SOFT, 0.6)
+    tone(o, 240, 500, glide(D6, 0.94, 14), ad(4, 120), SOFT, 0.9)
+    tone(o, 390, 1110, () => Fs6, ad(4, 380), GLASS, 0.5)
+    tone(o, 390, 1110, () => D6, ad(4, 320), MARIMBA, 0.35)
+    return finish(reverb(lowpass(o, 6500), 0.9, 0.2), -3, 250)
+  },
 }
-const LENGTH = { keep: 230, delete: 240, undo: 160, goal: 1300, achievement: 1000, cleared: 1100 } // ms, incl. tail
+const LENGTH = { keep: 230, delete: 240, undo: 160, goal: 1300, achievement: 1000, cleared: 1100, reminder: 1500 } // ms, incl. tail
 
 const outDir = process.argv[2] ?? 'assets/sounds'
 mkdirSync(outDir, { recursive: true })

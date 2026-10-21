@@ -11,7 +11,9 @@ const players = {
   goal: createAudioPlayer(require('../assets/sounds/goal.wav')),
   achievement: createAudioPlayer(require('../assets/sounds/achievement.wav')),
   cleared: createAudioPlayer(require('../assets/sounds/cleared.wav')),
+  reminder: createAudioPlayer(require('../assets/sounds/reminder.wav')), // the notification sound, previewed in setup
 }
+players.reminder.volume = 0.5 // mastered ~9 dB hotter than the UI sounds, like a real notification
 export type Sound = keyof typeof players
 
 // Replaying restarts the sound, so quick swipes never stack. Pause first: on Android a finished player
