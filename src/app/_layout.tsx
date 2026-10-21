@@ -7,6 +7,7 @@ import { setLocales } from '../i18n'
 import { schedule } from '../reminder'
 import { StoreProvider, useStore } from '../store'
 import { useTheme } from '../theme'
+import { checkForUpdate } from '../update'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -15,6 +16,7 @@ function Nav() {
   const t = useTheme()
   useEffect(() => {
     SplashScreen.hideAsync()
+    checkForUpdate()
     if (data.settings.reminder != null) schedule(data.settings.reminder, data.goal) // its text is in the language it was scheduled in
   }, [])
   return (

@@ -1,5 +1,5 @@
 // Run: npm test  (plain node + asserts, no framework)
-import { addDays, applyFreezes, arrange, completeProfile, decide, initialData, longestStreak, markDeleted, seasonOf, setGoal, setLibrary, stats, streak, undo, xp, yearOf, yearsLeft, type Data, type Photo } from './logic.ts'
+import { addDays, applyFreezes, arrange, completeProfile, decide, initialData, longestStreak, markDeleted, newer, seasonOf, setGoal, setLibrary, stats, streak, undo, xp, yearOf, yearsLeft, type Data, type Photo } from './logic.ts'
 
 const eq = (a: unknown, b: unknown) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${JSON.stringify(a)} !== ${JSON.stringify(b)}`)
@@ -124,5 +124,9 @@ ok(!goal({ ...initialData, goal: 25 }, T).unlocked.profile) // never from stats
 eq([seasonOf(new Date(2024, 11, 24)), seasonOf(new Date(2025, 1, 28)), seasonOf(new Date(2024, 6, 14)), seasonOf(new Date(2024, 9, 1))], ['winter', 'winter', 'summer', 'autumn'])
 eq(seasonOf(new Date(2024, 6, 14), true), 'winter')
 eq(seasonOf(new Date(2024, 3, 1), true), 'autumn')
+
+// store versions compare part by part, as numbers
+ok(newer('1.10.0', '1.9.9') && newer('2.0.0', '1.99.0') && newer('1.0.1', '1.0'))
+ok(!newer('1.2.0', '1.2.0') && !newer('1.2.0', '1.3.0') && !newer('1.0', '1.0.1') && !newer('1.x', '1.0'))
 
 console.log('logic ok')

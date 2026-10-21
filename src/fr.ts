@@ -135,6 +135,9 @@ export const fr: Dict = {
   'common.on': 'Activé',
   'common.off': 'Désactivé',
   'common.close': 'Fermer',
+  'update.title': 'Mise à jour disponible',
+  'update.body': 'Une nouvelle version de SwipeOut est sortie. Mets à jour l’app pour profiter des dernières améliorations.',
+  'update.go': 'Mettre à jour',
 
   'setup.cardTitle': 'Complète ton profil',
   'setup.cardBody': '3 étapes rapides · environ 30 s',

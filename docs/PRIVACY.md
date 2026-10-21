@@ -1,6 +1,6 @@
 # SwipeOut Privacy Policy
 
-_Effective date: October 20, 2026_
+_Effective date: October 21, 2026_
 
 SwipeOut ("the app") helps you clean up your photo library one swipe at a time. This policy explains what the app accesses and what happens to it. In short: **your photos and your data never leave your device.**
 
@@ -8,6 +8,7 @@ SwipeOut ("the app") helps you clean up your photo library one swipe at a time. 
 
 - **Your photos.** With your permission, SwipeOut reads the photos on your device to show them to you one at a time, and deletes the ones you confirm in the Review screen. If you grant access to selected photos only, the app only sees those. Photos are displayed and processed entirely on your device. They are never uploaded, copied to a server or shared.
 - **Notifications.** If you turn on the daily reminder, the app schedules a local notification on your device. No push service or server is involved.
+- **Update check.** When the app opens, it asks the App Store (on iPhone and iPad) or Google Play (on Android) whether a newer version of SwipeOut is out. To answer, Apple or Google receive the app's ID and version and basic device information such as the OS version. Your photos and progress are never sent.
 
 ## What the app stores
 

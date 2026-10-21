@@ -143,6 +143,9 @@ const en = {
   'common.on': 'On',
   'common.off': 'Off',
   'common.close': 'Close',
+  'update.title': 'Update available',
+  'update.body': 'A new version of SwipeOut is out. Update to get the latest improvements.',
+  'update.go': 'Update',
 
   // profile setup
   'setup.cardTitle': 'Complete your profile',

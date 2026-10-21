@@ -218,6 +218,13 @@ export function applyFreezes(s: Data, today: string): Data {
   return { ...s, days, freezes: s.freezes - gap.length }
 }
 
+// "1.10.0" is newer than "1.9.9": parts compare as numbers. An unparseable part never counts as newer.
+export function newer(a: string, b: string) {
+  const [x, y] = [a, b].map(v => v.split('.').map(Number))
+  const i = x.findIndex((n, i) => n !== (y[i] ?? 0))
+  return i >= 0 && x[i] > (y[i] ?? 0)
+}
+
 export const nextBadge = (current: number) => STREAK_BADGES.find(n => n > current) ?? null
 
 // Level n needs 50·n·(n-1) XP: 0, 100, 300, 600, 1000…
