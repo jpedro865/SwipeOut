@@ -1,11 +1,11 @@
 # Releasing SwipeOut
 
-Everything runs in `.github/workflows/ci.yml`.
+Everything runs in `.github/workflows/ci.yml`, which hands Android releases to `.github/workflows/play.yml` for Google Play.
 
 | Event | What happens |
 |---|---|
 | Pull request | Commit subjects are checked (the PR title has its own quick check in `pr-title.yml`), then typecheck, `npm test`, `expo-doctor`, a debug-signed Android release build (arm64) and an unsigned iOS device archive. |
-| Push to `master`, or **Run workflow** on `master` | Same checks. If the commits since the last tag include `feat`, `fix` or `perf` (or a breaking change), semantic-release picks the next version. Each platform whose secrets are set is built, signed and pushed to GitHub Packages; a platform without them gets a verify build instead. Then the commit is tagged `vX.Y.Z` with release notes. |
+| Push to `master`, or **Run workflow** on `master` | Same checks. If the commits since the last tag include `feat`, `fix` or `perf` (or a breaking change), semantic-release picks the next version. Each platform whose secrets are set is built, signed and pushed to GitHub Packages; a platform without them gets a verify build instead. Then the commit is tagged `vX.Y.Z` with release notes, and the Android build is sent to Google Play's closed test once [Google Play](#google-play) is set up. |
 
 Binaries are never uploaded as workflow artifacts or attached to GitHub Releases: on a public repo, both can be downloaded by anyone.
 
@@ -114,9 +114,53 @@ A version is final once its `vX.Y.Z` tag exists. If a run fails after the packag
 
 The signed build jobs refuse to push a version that's already tagged, so re-running an old run can't overwrite a released build.
 
-## Next: store submission
+## Google Play
 
-Store uploads plug in as jobs after the tag job, pulling the packages above by version:
+Once a version is tagged, `play.yml` pulls its `.aab` and R8 mapping from the private package, uploads them to Play's **closed testing** track (`alpha`) and sends the release for review. Once Google approves it, testers get the update. The internal track isn't used: people who join internal testing can't count toward the closed test that production access needs.
 
-- **Google Play**: upload the `.aab` and the mapping file with a Play Console service account.
-- **App Store Connect**: upload the `.ipa` with an App Store Connect API key (`xcrun altool --upload-app --api-key ... --api-issuer ...`).
+- **A newer release replaces one still in review.** Play cancels the pending review and reviews the newer build instead, so the latest version always reaches testers.
+- **After a rejected review**, Play won't auto-submit. The upload is still saved on the track, and the run warns you to fix the rejection and send it from **Play Console → Publishing overview**.
+- **Run it by hand** to (re)send any tagged version: **Actions → Google Play → Run workflow** on `master`, with the version (e.g. `1.2.0`). A version Play already has is rejected ("version code already used").
+
+### Sign-in: Workload Identity Federation (no stored key)
+
+There is no Google key in GitHub. A job in this repo's `production` environment on `master` presents GitHub's OIDC token to Google, which exchanges it for a one-hour token of a service account. That service account can only release to testing tracks.
+
+Run once with [gcloud](https://cloud.google.com/sdk/docs/install), signed in as the Play Console owner. `1426710998` is this repo's ID (`gh api repos/jpedro865/SwipeOut -q .id`), which survives renames:
+
+```bash
+P=swipeout-release   # any unused Cloud project ID
+gcloud projects create "$P"
+gcloud services enable iam.googleapis.com iamcredentials.googleapis.com sts.googleapis.com androidpublisher.googleapis.com --project "$P"
+gcloud iam service-accounts create play-publisher --project "$P" --display-name "SwipeOut CI: Google Play"
+gcloud iam workload-identity-pools create github --project "$P" --location global
+gcloud iam workload-identity-pools providers create-oidc swipeout --project "$P" --location global --workload-identity-pool github \
+  --issuer-uri https://token.actions.githubusercontent.com \
+  --attribute-mapping google.subject=assertion.sub,attribute.repository_id=assertion.repository_id \
+  --attribute-condition "assertion.repository_id == '1426710998' && assertion.environment == 'production' && assertion.ref == 'refs/heads/master'"
+N=$(gcloud projects describe "$P" --format 'value(projectNumber)')
+gcloud iam service-accounts add-iam-policy-binding "play-publisher@$P.iam.gserviceaccount.com" --project "$P" \
+  --role roles/iam.workloadIdentityUser \
+  --member "principalSet://iam.googleapis.com/projects/$N/locations/global/workloadIdentityPools/github/attribute.repository_id/1426710998"
+```
+
+Then:
+
+1. In **Play Console → Users and permissions → Invite new users**, enter `play-publisher@<project>.iam.gserviceaccount.com`. Under **App permissions**, add SwipeOut with only **Release apps to testing tracks**, then **Invite user**. Google says permission changes can take up to 48 hours to apply.
+2. Wait until Google has approved the first release. Until then the app is a draft, and Play only accepts draft releases.
+3. Add two **environment variables** (not secrets) to `production`:
+
+| Variable | Value |
+|---|---|
+| `PLAY_WIF_PROVIDER` | `projects/<project number>/locations/global/workloadIdentityPools/github/providers/swipeout` |
+| `PLAY_SERVICE_ACCOUNT` | `play-publisher@<project>.iam.gserviceaccount.com` |
+
+Until both are set, releases skip Google Play with a warning. To send the latest version that was released before the setup, run the workflow by hand.
+
+### Production
+
+Once 12 testers have stayed opted in to the closed test for 14 days, apply for production access from the Play Console **Dashboard**. It asks about the closed test, including how you collected tester feedback, and Google's review usually takes up to 7 days. Releasing there will then need the **Release to production, exclude devices, and use Play App Signing** permission and a step that promotes the tested build to the `production` track.
+
+## Next: App Store
+
+Store uploads plug in as jobs after the tag job, pulling the packages above by version: upload the `.ipa` to **App Store Connect** with an App Store Connect API key (`xcrun altool --upload-app --api-key ... --api-issuer ...`).
