@@ -24,6 +24,7 @@ function Nav() {
         <Stack.Protected guard={data.onboarded}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="review" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="setup" options={{ presentation: 'modal' }} />
           <Stack.Screen name="complete" options={{ presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } }} />
         </Stack.Protected>
         <Stack.Protected guard={!data.onboarded}>

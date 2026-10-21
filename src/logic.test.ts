@@ -1,5 +1,5 @@
 // Run: npm test  (plain node + asserts, no framework)
-import { addDays, applyFreezes, arrange, decide, initialData, longestStreak, markDeleted, seasonOf, setGoal, setLibrary, stats, streak, undo, xp, yearOf, yearsLeft, type Data, type Photo } from './logic.ts'
+import { addDays, applyFreezes, arrange, completeProfile, decide, initialData, longestStreak, markDeleted, seasonOf, setGoal, setLibrary, stats, streak, undo, xp, yearOf, yearsLeft, type Data, type Photo } from './logic.ts'
 
 const eq = (a: unknown, b: unknown) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${JSON.stringify(a)} !== ${JSON.stringify(b)}`)
@@ -114,6 +114,13 @@ ok(ids(arrange(chain, {}, true, null)).join() !== ids(arrange(chain, {}, false, 
 const pile = Array.from({ length: 120 }, (_, i) => ph(`p${i}`, at(2020, 1, 1)))
 ok(ids(arrange(pile, {}, true, null)).join() !== ids(pile).join())
 eq(yearOf(new Date(1965, 5, 1).getTime()), 1965) // scanned pre-1970 photos keep their year
+
+// finishing the profile setup unlocks its badge (+100 XP) once, with or without a reminder
+s = completeProfile({ ...initialData }, T)
+eq(s.unlocked.profile, T)
+eq(xp(s).points, 100)
+eq(completeProfile(s, addDays(T, 1)).unlocked.profile, T)
+ok(!goal({ ...initialData, goal: 25 }, T).unlocked.profile) // never from stats
 eq([seasonOf(new Date(2024, 11, 24)), seasonOf(new Date(2025, 1, 28)), seasonOf(new Date(2024, 6, 14)), seasonOf(new Date(2024, 9, 1))], ['winter', 'winter', 'summer', 'autumn'])
 eq(seasonOf(new Date(2024, 6, 14), true), 'winter')
 eq(seasonOf(new Date(2024, 3, 1), true), 'autumn')

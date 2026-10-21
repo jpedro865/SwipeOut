@@ -22,3 +22,17 @@ export const schedule = (minutes: number | null, goal: number) => {
     })
     .catch(e => console.warn('swipeout: could not schedule reminder', e))
 }
+
+// 'blocked': only system settings can turn them on now. null: not allowed, but asking again is possible.
+export type Perm = 'granted' | 'blocked' | null
+export const permState = (p: Notifications.NotificationPermissionsStatus): Perm => (p.granted ? 'granted' : p.canAskAgain ? null : 'blocked')
+
+async function ask() {
+  await channel()
+  let p = await Notifications.getPermissionsAsync()
+  if (!p.granted && p.canAskAgain) p = await Notifications.requestPermissionsAsync()
+  return permState(p)
+}
+// Asks only on an explicit tap; a double tap waits on the same prompt instead of queuing a second one.
+let asking: Promise<Perm> | null = null
+export const allowNotifications = () => (asking ??= ask().finally(() => { asking = null }))

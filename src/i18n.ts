@@ -140,7 +140,34 @@ const en = {
   'common.openSettings': 'Open Settings',
   'common.cancel': 'Cancel',
   'common.delete': 'Delete',
+  'common.on': 'On',
+  'common.off': 'Off',
   'common.close': 'Close',
+
+  // profile setup
+  'setup.cardTitle': 'Complete your profile',
+  'setup.cardBody': '3 quick steps · about 30 s',
+  'setup.nudge': 'Never miss a day',
+  'setup.nudgeBody': 'One gentle reminder a day, at your moment',
+  'setup.goalQ': 'Your daily goal',
+  'setup.goalBody': 'How many photos a day feels right?',
+  'setup.momentQ': 'When’s your swipe moment?',
+  'setup.momentBody': 'One nudge a day, right at your moment. Never more.',
+  'setup.trust': 'Set on your phone. No account, nothing sent.',
+  'setup.morning': 'Morning coffee',
+  'setup.lunch': 'Lunch break',
+  'setup.commute': 'Commute',
+  'setup.evening': 'Evening',
+  'setup.now': 'now',
+  'setup.remindAt': 'Remind me at {time}',
+  'setup.on': 'Reminder on · {time}',
+  'setup.off': 'Notifications are off for SwipeOut. Turn them on in Settings whenever you like.',
+  'setup.preview': 'Preview of your reminder',
+  'setup.yoursQ': 'Make it yours',
+  'setup.yoursBody': 'Tap a tile to switch it. You’ll feel the difference.',
+  'setup.unlocked': 'Achievement unlocked',
+  'setup.doneBody': 'Change anything anytime in Profile.',
+  'setup.finish': 'All done',
 
   // complete
   'complete.title': 'Goal complete!',
@@ -174,6 +201,8 @@ const en = {
   'onb.step': 'Step {n} of {total}',
 
   // achievements (ids from logic.ts)
+  'ach.profile': 'All Set',
+  'ach.profile.d': 'Profile complete. Your SwipeOut, your way.',
   'ach.r100': 'Photo Rookie',
   'ach.r100.d': '100 reviewed. You’re officially underway.',
   'ach.r500': 'Momentum',

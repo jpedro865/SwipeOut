@@ -1,6 +1,7 @@
 import { router } from 'expo-router'
 import { useEffect } from 'react'
-import { Animated, ScrollView, StyleSheet, View, useAnimatedValue, useWindowDimensions } from 'react-native'
+import { Pressable, ScrollView, View } from 'react-native'
+import { Confetti } from '../components/Confetti'
 import { achTitle, fmtPct, milestone, t } from '../i18n'
 import { ACHIEVEMENTS, dayKey, stats, streak } from '../logic'
 import { play } from '../sound'
@@ -8,30 +9,20 @@ import { useStore } from '../store'
 import { useTheme } from '../theme'
 import { Button, Card, Icon, Stat, Txt, buzz, center } from '../ui'
 
-const rnd = (i: number, k: number) => {
-  const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453
-  return x - Math.floor(x)
-}
-const PIECES = Array.from({ length: 36 }, (_, i) => ({ x: rnd(i, 1), start: rnd(i, 2) * 0.35, fall: 0.6 + rnd(i, 3) * 0.5, spin: (rnd(i, 4) - 0.5) * 1440, drift: (rnd(i, 5) - 0.5) * 80 }))
-
 export default function Complete() {
   const th = useTheme()
   const { data } = useStore()
-  const { width, height } = useWindowDimensions()
-  const p = useAnimatedValue(0)
   const motion = data.settings.motion
 
   useEffect(() => {
     buzz(data.settings.haptics, 'success')
     play('goal', data.settings.sounds)
-    if (motion) Animated.timing(p, { toValue: 1, duration: 1800, useNativeDriver: true }).start()
   }, [])
 
   const today = dayKey()
   const s = streak(data.days, today)
   const { marked, pct } = stats(data)
-  const fresh = ACHIEVEMENTS.filter(a => data.unlocked[a.id] === today)
-  const colors = [th.coral, th.mint, th.lavender, '#FFFFFF']
+  const fresh = ACHIEVEMENTS.filter(a => data.unlocked[a.id] === today && a.id !== 'profile') // setup celebrates its own
   const chip = { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: th.raised, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 } as const
 
   return (
@@ -64,34 +55,29 @@ export default function Complete() {
               ))}
             </View>
           )}
+          {data.settings.reminder == null && !data.unlocked.profile && (
+            // Right after a win is the moment a reminder makes sense: opens the setup on its reminder step.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${t('setup.nudge')}. ${t('setup.nudgeBody')}`}
+              onPress={() => router.replace({ pathname: '/setup', params: { step: 'moment' } })}
+              style={({ pressed }) => ({ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 16, backgroundColor: th.raised, opacity: pressed ? 0.7 : 1 })}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: th.lavender, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon n="reminder" size={18} color={th.midnight} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Txt style={{ fontWeight: '700' }}>{t('setup.nudge')}</Txt>
+                <Txt v="small" muted>{t('setup.nudgeBody')}</Txt>
+              </View>
+              <Icon n="next" size={14} color={th.muted} />
+            </Pressable>
+          )}
           <Button title={t('complete.continue')} onPress={() => router.back()} style={{ alignSelf: 'stretch' }} />
           {marked > 0 && <Button icon="trash" title={t('swipe.review', { n: marked })} outline onPress={() => router.replace('/review')} style={{ alignSelf: 'stretch' }} />}
         </Card>
       </ScrollView>
-      {motion && (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          {PIECES.map((c, i) => (
-            <Animated.View
-              key={i}
-              style={{
-                position: 'absolute',
-                top: -20,
-                left: c.x * width,
-                width: 8,
-                height: 14,
-                borderRadius: 2,
-                backgroundColor: colors[i % 4],
-                opacity: p.interpolate({ inputRange: [0, 0.8, 1], outputRange: [1, 1, 0] }),
-                transform: [
-                  { translateY: p.interpolate({ inputRange: [c.start, 1], outputRange: [0, height * c.fall + 20], extrapolate: 'clamp' }) },
-                  { translateX: p.interpolate({ inputRange: [0, 1], outputRange: [0, c.drift] }) },
-                  { rotate: p.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${c.spin}deg`] }) },
-                ],
-              }}
-            />
-          ))}
-        </View>
-      )}
+      <Confetti run={motion} />
     </View>
   )
 }

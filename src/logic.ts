@@ -131,6 +131,7 @@ type Achievement = { id: string; icon: string; test: (c: Ctx) => boolean }
 const badge = (days: number, icon: string): Achievement => ({ id: `streak${days}`, icon, test: c => c.longest >= days })
 
 export const ACHIEVEMENTS: Achievement[] = [
+  { id: 'profile', icon: '🎛️', test: () => false }, // unlocked by completeProfile
   { id: 'r100', icon: '📸', test: c => c.reviewed >= 100 },
   { id: 'r500', icon: '🌊', test: c => c.reviewed >= 500 },
   { id: 'r1000', icon: '🧹', test: c => c.reviewed >= 1000 },
@@ -160,6 +161,10 @@ function settle(s: Data, today: string): Data {
   const earned = streak(s.days, today) % FREEZE_EVERY === 0 && s.freezes < MAX_FREEZES
   return unlock({ ...s, freezes: s.freezes + (earned ? 1 : 0), days: { ...s.days, [today]: { ...day, done: true, earned } } }, today)
 }
+
+// Reaching the end of the profile setup unlocks its badge, reminder or not: a reward can't hinge on allowing
+// notifications (App Store guideline 5.1.2(i)); the flow itself makes the case for the reminder.
+export const completeProfile = (s: Data, today: string): Data => (s.unlocked.profile ? s : { ...s, unlocked: { ...s.unlocked, profile: today } })
 
 export function decide(s: Data, id: string, choice: 'keep' | 'delete', today: string): Data {
   if (s.decisions[id]) return s

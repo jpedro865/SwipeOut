@@ -55,6 +55,16 @@ const ICONS = {
   time: ['clock', 'schedule'],
   tap: ['hand.tap.fill', 'touch_app'],
   lock: ['lock.fill', 'lock'],
+  profile: ['person.crop.circle.badge.checkmark', 'how_to_reg'],
+  reminderOff: ['bell.slash.fill', 'notifications_off'],
+  morning: ['sunrise.fill', 'wb_twilight'],
+  lunch: ['fork.knife', 'restaurant'],
+  commute: ['tram.fill', 'tram'],
+  evening: ['moon.stars.fill', 'bedtime'],
+  soundsOff: ['speaker.slash.fill', 'volume_off'],
+  hapticsOff: ['iphone.slash', 'mobile_off'],
+  calm: ['pause.circle.fill', 'pause_circle'],
+  newest: ['arrow.down.circle.fill', 'arrow_downward'],
 } satisfies Record<string, [SFSymbol, AndroidSymbol]>
 export type IconName = keyof typeof ICONS
 

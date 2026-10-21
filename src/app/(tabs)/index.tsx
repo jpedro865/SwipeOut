@@ -82,8 +82,9 @@ export default function Swipe() {
   const seen = useRef(unlocked.length)
   useEffect(() => {
     if (!focused) return // celebrate on return instead of dropping it
-    if (unlocked.length > seen.current) {
-      const a = ACHIEVEMENTS.find(a => a.id === unlocked[unlocked.length - 1])
+    const fresh = unlocked.slice(seen.current).filter(id => id !== 'profile') // the setup finale celebrates its own
+    if (fresh.length) {
+      const a = ACHIEVEMENTS.find(a => a.id === fresh[fresh.length - 1])
       const title = a ? achTitle(a.id) : ''
       setToast({ emoji: a?.icon, text: title, say: t('swipe.unlocked', { title }) })
       play('achievement', sounds)

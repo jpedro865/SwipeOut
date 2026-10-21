@@ -1,12 +1,11 @@
 import Constants from 'expo-constants'
-import * as Notifications from 'expo-notifications'
-import { useIsFocused } from 'expo-router'
+import { router, useIsFocused } from 'expo-router'
 import { memo } from 'react'
 import { Alert, Linking, Platform, Pressable, ScrollView, Switch, View } from 'react-native'
 import { getLocales } from 'expo-localization'
 import { achDesc, achTitle, fmtDay, fmtNum, fmtTime, t } from '../../i18n'
 import { ACHIEVEMENTS, GOALS, dayKey, setGoal, xp, type Data, type Settings } from '../../logic'
-import { channel, schedule } from '../../reminder'
+import { allowNotifications, schedule } from '../../reminder'
 import { play } from '../../sound'
 import { useStore } from '../../store'
 import { useTheme } from '../../theme'
@@ -42,9 +41,7 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
       set({ reminder: null })
       return schedule(null, data.goal)
     }
-    await channel()
-    const cur = await Notifications.getPermissionsAsync()
-    if (!cur.granted && !(cur.canAskAgain && (await Notifications.requestPermissionsAsync()).granted)) {
+    if ((await allowNotifications()) !== 'granted') {
       return Alert.alert(t('notif.offTitle'), t('notif.offBody'), [
         { text: t('common.notNow'), style: 'cancel' },
         { text: t('common.openSettings'), onPress: () => Linking.openSettings() },
@@ -87,6 +84,34 @@ const Body = memo(function Body({ data, update }: { data: Data; update: ReturnTy
     <Screen>
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20, gap: 16 }}>
         <Txt v="title" accessibilityRole="header">{t('profile.title')}</Txt>
+
+        {!data.unlocked.profile && (
+          <Pressable accessibilityRole="button" accessibilityLabel={`${t('setup.cardTitle')}. ${t('setup.cardBody')}. +100 XP`} onPress={() => router.push('/setup')} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 2, borderColor: th.coral + '66' }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: th.coral, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon n="profile" size={26} color={th.midnight} />
+              </View>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Txt v="h2">{t('setup.cardTitle')}</Txt>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {(['goal', 'reminder', 'sparkles'] as IconName[]).map(icon => (
+                    <View key={icon} style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: th.raised, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon n={icon} size={12} color={th.coral} />
+                    </View>
+                  ))}
+                  <Txt v="small" muted style={{ flexShrink: 1 }}>{t('setup.cardBody')}</Txt>
+                </View>
+              </View>
+              <View style={{ alignItems: 'center', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: th.lavender, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Icon n="xp" size={11} color={th.midnight} />
+                  <Txt v="small" color={th.midnight} style={{ fontWeight: '800' }}>+100</Txt>
+                </View>
+                <Icon n="next" size={14} color={th.muted} />
+              </View>
+            </Card>
+          </Pressable>
+        )}
 
         <Card>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
