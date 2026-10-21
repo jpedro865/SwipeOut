@@ -1,0 +1,108 @@
+name: Google Play
+
+# Sends a released Android build (AAB + R8 mapping, from the private package) to Play's closed testing
+# track, where it goes to review and then out to testers. ci.yml calls this once a version is tagged;
+# run it by hand to (re)send a released version. Sign-in is keyless: see docs/RELEASING.md.
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+    secrets:
+      GHCR_TOKEN: # an environment secret still has to be passed in by the caller, or it's silently empty
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released version to send, e.g. 1.2.0
+        type: string
+        required: true
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  upload:
+    name: Upload to Google Play
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: google-play # one Play edit at a time
+      cancel-in-progress: false
+    permissions:
+      contents: read # tag check
+      id-token: write # GitHub OIDC token for Workload Identity Federation
+    env:
+      VERSION: ${{ inputs.version }}
+      PACKAGE_NAME: app.swipeout
+      TRACK: alpha # closed testing: internal testers can't count toward the closed test production access needs
+      PLAY_WIF_PROVIDER: ${{ vars.PLAY_WIF_PROVIDER }}
+      PLAY_SERVICE_ACCOUNT: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+    steps:
+      - name: Check the version is released
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Not a version: $VERSION"; exit 1; }
+          if [ -z "$PLAY_WIF_PROVIDER" ] || [ -z "$PLAY_SERVICE_ACCOUNT" ]; then
+            echo "::error::Set PLAY_WIF_PROVIDER and PLAY_SERVICE_ACCOUNT in the production environment (docs/RELEASING.md)"
+            exit 1
+          fi
+          # Only tagged versions are final: an untagged build can still be overwritten by the next master run.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GITHUB_TOKEN" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSION")
+          [ "$code" = 200 ] || { echo "::error::v$VERSION is not released (tag check: HTTP $code)"; exit 1; }
+      - uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+        with:
+          version: 1.3.4
+      - name: Pull the release
+        env:
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          auth="$RUNNER_TEMP/ghcr-auth.json"
+          trap 'rm -f "$auth"' EXIT
+          echo "$GHCR_TOKEN" | oras login ghcr.io -u "$GITHUB_REPOSITORY_OWNER" --password-stdin --registry-config "$auth"
+          oras pull --registry-config "$auth" -o dist "ghcr.io/${GITHUB_REPOSITORY,,}/android:$VERSION"
+      - name: Upload and send for review
+        run: |
+          call() { local out; out=$(curl -sS --fail-with-body "$@") || { echo "$out" >&2; return 1; }; echo "$out"; }
+
+          # Keyless sign-in: GitHub's OIDC token -> Google STS -> a 1-hour token for the Play service account.
+          provider="iam.googleapis.com/$PLAY_WIF_PROVIDER"
+          oidc=$(call -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://$provider" | jq -er .value)
+          federated=$(jq -n --arg aud "//$provider" --arg jwt "$oidc" '{audience: $aud, subjectToken: $jwt,
+              grantType: "urn:ietf:params:oauth:grant-type:token-exchange", subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
+              requestedTokenType: "urn:ietf:params:oauth:token-type:access_token", scope: "https://www.googleapis.com/auth/cloud-platform"}' \
+            | call --json @- https://sts.googleapis.com/v1/token | jq -er .access_token)
+          token=$(call -H "Authorization: Bearer $federated" --json '{"scope": ["https://www.googleapis.com/auth/androidpublisher"]}' \
+            "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/$PLAY_SERVICE_ACCOUNT:generateAccessToken" | jq -er .accessToken)
+          echo "::add-mask::$token"
+          play() { call -H "Authorization: Bearer $token" "$@"; }
+
+          # One edit: upload, attach the mapping, point the track at the new build, commit.
+          edits="https://androidpublisher.googleapis.com/androidpublisher/v3/applications/$PACKAGE_NAME/edits"
+          uploads="https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/$PACKAGE_NAME/edits"
+          edit=$(play --json '{}' "$edits" | jq -er .id)
+          trap '[ -n "${committed:-}" ] || play -X DELETE "$edits/$edit" > /dev/null || true' EXIT
+          code=$(play --max-time 900 -H 'Content-Type: application/octet-stream' --data-binary "@dist/swipeout-$VERSION.aab" \
+            "$uploads/$edit/bundles?uploadType=media" | jq -er .versionCode)
+          play -H 'Content-Type: application/octet-stream' --data-binary "@dist/swipeout-$VERSION-mapping.txt" \
+            "$uploads/$edit/apks/$code/deobfuscationFiles/proguard?uploadType=media" > /dev/null
+          jq -n --arg name "$VERSION" --arg code "$code" '{releases: [{name: $name, versionCodes: [$code], status: "completed"}]}' \
+            | play -X PUT --json @- "$edits/$edit/tracks/$TRACK" > /dev/null
+          # A release still in review is replaced by this one (Play's default). After a rejection Play won't
+          # auto-submit: the release is then saved, and you send it for review from the Console.
+          if out=$(play -d '' "$edits/$edit:commit" 2>&1); then
+            committed=1
+            echo "### v$VERSION ($code) sent to Google Play ($TRACK) for review" >> "$GITHUB_STEP_SUMMARY"
+          else
+            grep -q changesNotSentForReview <<< "$out" || { echo "$out" >&2; exit 1; }
+            play -d '' "$edits/$edit:commit?changesNotSentForReview=true" > /dev/null
+            committed=1
+            echo "::warning title=Google Play::v$VERSION ($code) is on $TRACK but was not sent for review because a previous review was rejected. Fix that, then send it from Play Console > Publishing overview."
+          fi
